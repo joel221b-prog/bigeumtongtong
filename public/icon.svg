@@ -1,0 +1,24 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg_teal_final" x1="256" y1="0" x2="256" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#88C9BC"/>
+      <stop offset="1" stop-color="#66B2A2"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="115" fill="url(#bg_teal_final)"/>
+  <path d="M0 450 L80 420 L160 450 L240 420 L320 450 L400 420 L480 450 L512 438 V512 H0 Z" fill="white" fill-opacity="0.12"/>
+  <g transform="translate(68, 140) scale(1.88)">
+    <path d="M125 -22 L132 -29 L125 -36 L118 -29 Z" fill="white" fill-opacity="0.4"/>
+    <path d="M142 -44 L148 -50 L142 -56 L136 -50 Z" fill="white" fill-opacity="0.2"/>
+    <path d="M75 -10 L100 -5 L100 30 L75 25 Z" fill="#A07D3D"/>
+    <path d="M100 -5 L115 2 L115 37 L100 30 Z" fill="#8B6B2F"/>
+    <path d="M30 30 L170 30 L155 75 L45 75 Z" fill="#FFFFFF"/>
+    <rect x="65" y="45" width="18" height="15" fill="#66B2A2" fill-opacity="0.5"/>
+    <rect x="91" y="45" width="18" height="15" fill="#66B2A2" fill-opacity="0.5"/>
+    <rect x="117" y="45" width="18" height="15" fill="#66B2A2" fill-opacity="0.5"/>
+    <path d="M15 75 L100 75 L100 135 Z" fill="#D4AF37"/>
+    <path d="M100 75 L190 75 L100 135 Z" fill="#B08D26"/>
+    <path d="M10 75 L38 75 L15 86 Z" fill="#8B6B2F"/>
+    <path d="M38 75 L100 75 L100 78 L42 78 Z" fill="black" fill-opacity="0.05"/>
+  </g>
+</svg>

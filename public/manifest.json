@@ -1,0 +1,21 @@
+{
+  "name": "비금통통",
+  "short_name": "비금통통",
+  "description": "비금도 가산·남강 여객선 배편 시간표",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#4aada0",
+  "theme_color": "#4aada0",
+  "lang": "ko",
+  "icons": [
+    { "src": "/icon-72x72.png",   "sizes": "72x72",   "type": "image/png" },
+    { "src": "/icon-96x96.png",   "sizes": "96x96",   "type": "image/png" },
+    { "src": "/icon-120x120.png", "sizes": "120x120", "type": "image/png" },
+    { "src": "/icon-144x144.png", "sizes": "144x144", "type": "image/png" },
+    { "src": "/icon-152x152.png", "sizes": "152x152", "type": "image/png" },
+    { "src": "/icon-180x180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/icon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
