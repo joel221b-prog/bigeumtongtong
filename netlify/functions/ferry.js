@@ -73,18 +73,27 @@ exports.handler = async (event) => {
     /* 출발 시간 기준 정렬 */
     items.sort((a, b) => Number(a.sail_tm ?? 0) - Number(b.sail_tm ?? 0));
 
-    const schedule = items.map((item, idx) => ({
-      id:      idx + 1,
-      dep:     fmtTime(item.sail_tm),          // 출항시각
-      arr:     fmtTime(item.arvl_tm),          // 도착시각
-      vessel:  item.psnshp_nm ?? "정보없음",    // 여객선명
-      seats:   Number(item.psngr_cap ?? item.psnshp_cap ?? 0), // 여객정원
-      status:  item.ntc_stts_nm ?? "예정",     // 통제상태명
-      reason:  item.ntc_rsn_nm  ?? "",         // 통제사유
-      depPort: item.oport_nm    ?? "",         // 출항지명
-      destPort:item.dest_nm     ?? "",         // 도착지명
-      routeNm: item.lcns_seawy_nm ?? "",       // 면허항로명
-    }));
+    const schedule = items.map((item, idx) => {
+      /* 상태 변환: nvg_stts_nm 기준 */
+      const raw = item.nvg_stts_nm ?? "";
+      const status = raw.includes("운항중") ? "운항중"
+                   : raw.includes("완료")   ? "완료"
+                   : (item.cntrl_rsn_nm || raw.includes("통제") || raw.includes("결항")) ? "결항"
+                   : "예정"; // 출항전 포함 기본값
+      return {
+        id:       idx + 1,
+        dep:      fmtTime(item.sail_tm),
+        arr:      fmtTime(item.arvl_tm),
+        vessel:   item.psnshp_nm   ?? "정보없음",
+        seats:    Number(item.psngr_cap ?? item.psnshp_cap ?? 0),
+        status,
+        reason:   item.cntrl_rsn_nm ?? "",    // 통제사유 (결항 시)
+        depPort:  item.oport_nm     ?? "",
+        destPort: item.dest_nm      ?? "",
+        routeNm:  item.lcns_seawy_nm ?? "",
+        nvgType:  item.nvg_se_nm    ?? "",    // 정상/증회/비운
+      };
+    });
 
     return res(200, { schedule, date, depPort, total: schedule.length });
 
