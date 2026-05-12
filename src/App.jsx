@@ -679,6 +679,8 @@ export default function App(){
           </div>
         </div>
 
+      </div>{/* ── 본문 wrapper 닫기 ── */}
+
       {/* ── 법적 고지 모달 ── */}
       {legalModal&&(
         <div onClick={()=>setLegalModal(null)} style={{
