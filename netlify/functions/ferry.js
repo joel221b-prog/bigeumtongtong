@@ -7,11 +7,23 @@
  *   lcns_seawy_nm, nvg_seawy_nm, nvg_drc_nm, nvg_se_cd ...
  */
 
-/* "830" → "08:30", "1530" → "15:30" */
+/* "830" → "08:30" */
 function fmtTime(t) {
   if (!t) return "";
   const s = String(t).padStart(4, "0");
   return `${s.slice(0, 2)}:${s.slice(2, 4)}`;
+}
+
+/* 출발시각(숫자) + 분 → "HH:MM" */
+function addMinutes(sailTm, min) {
+  if (!sailTm) return "";
+  const s   = String(sailTm).padStart(4, "0");
+  const h   = parseInt(s.slice(0, 2), 10);
+  const m   = parseInt(s.slice(2, 4), 10);
+  const tot = h * 60 + m + min;
+  const rh  = Math.floor(tot / 60) % 24;
+  const rm  = tot % 60;
+  return `${String(rh).padStart(2,"0")}:${String(rm).padStart(2,"0")}`;
 }
 
 exports.handler = async (event) => {
@@ -70,25 +82,32 @@ exports.handler = async (event) => {
     /* 출발 시간 기준 정렬 */
     items.sort((a, b) => Number(a.sail_tm ?? 0) - Number(b.sail_tm ?? 0));
 
+    // 첫 항목 로그 — 운항항로 필드 확인용
+    if (items.length > 0) {
+      const s = items[0];
+      console.log("[ferry] 첫항목 lcns_seawy_nm:", s.lcns_seawy_nm,
+        "/ nvg_seawy_nm:", s.nvg_seawy_nm, "/ nvg_se_nm:", s.nvg_se_nm);
+    }
+
     const schedule = items.map((item, idx) => {
-      /* 상태 변환: nvg_stts_nm 기준 */
       const raw = item.nvg_stts_nm ?? "";
       const status = raw.includes("운항중") ? "운항중"
                    : raw.includes("완료")   ? "완료"
                    : (item.cntrl_rsn_nm || raw.includes("통제") || raw.includes("결항")) ? "결항"
-                   : "예정"; // 출항전 포함 기본값
+                   : "예정";
       return {
         id:       idx + 1,
         dep:      fmtTime(item.sail_tm),
-        arr:      fmtTime(item.arvl_tm),
-        vessel:   item.psnshp_nm   ?? "정보없음",
+        arr:      item.arvl_tm ? fmtTime(item.arvl_tm) : addMinutes(item.sail_tm, 40), // API 없으면 +40분
+        vessel:   item.psnshp_nm    ?? "정보없음",
         seats:    Number(item.psngr_cap ?? item.psnshp_cap ?? 0),
         status,
-        reason:   item.cntrl_rsn_nm ?? "",    // 통제사유 (결항 시)
+        reason:   item.cntrl_rsn_nm ?? "",
         depPort:  item.oport_nm     ?? "",
         destPort: item.dest_nm      ?? "",
-        routeNm:  item.lcns_seawy_nm ?? "",
-        nvgType:  item.nvg_se_nm    ?? "",    // 정상/증회/비운
+        routeNm:  item.lcns_seawy_nm ?? "",  // 면허항로명 (예: 남강-가산)
+        nvgSeawy: item.nvg_seawy_nm ?? "",   // 운항항로명 상세
+        nvgSe:    item.nvg_se_nm    ?? "",   // 운항구분 (정상/비운/증회)
       };
     });
 

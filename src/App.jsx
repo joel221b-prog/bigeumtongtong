@@ -103,7 +103,7 @@ function DatePicker({selectedDate,onChange}){
           inset:0,
           width:"100%",
           height:"100%",
-          opacity:0,
+          opacity:0.01,
           cursor:"pointer",
           fontSize:16,   /* iOS 자동 확대 방지 */
           border:"none",
@@ -386,7 +386,9 @@ export default function App(){
                   <span style={{fontSize:52,fontWeight:900,color:C.white,fontVariantNumeric:"tabular-nums",letterSpacing:"-2.5px",lineHeight:1}}>{highlight.dep}</span>
                   <span style={{fontSize:17,color:"rgba(255,255,255,0.6)",fontWeight:600}}>출발</span>
                 </div>
-                <div style={{fontSize:15,color:"rgba(255,255,255,0.82)",fontWeight:600}}>{highlight.vessel} · {highlight.arr} 도착</div>
+                <div style={{fontSize:15,color:"rgba(255,255,255,0.82)",fontWeight:600}}>
+                  {highlight.vessel}{highlight.arr ? ` · ${highlight.arr} 도착` : ""}
+                </div>
               </div>
               <svg width="90" height="80" viewBox="0 0 100 90" fill="none">
                 <circle cx="52" cy="10" r="6" fill="rgba(255,255,255,0.50)"/>
@@ -529,11 +531,11 @@ export default function App(){
                               </div>
                             ))}
                           </div>
-                          {/* 운항항로명 */}
-                          {item.nvgType&&(
+                          {/* 운항항로 (면허항로명: 남강-가산 등) */}
+                          {item.routeNm&&(
                             <div style={{background:C.bg,borderRadius:10,padding:"9px 12px",border:`1px solid ${C.inkFaint}`}}>
                               <div style={{fontSize:10,color:C.inkLight,marginBottom:3}}>운항항로</div>
-                              <div style={{fontSize:13,fontWeight:700,color:C.inkMid,wordBreak:"break-all"}}>{item.nvgType}</div>
+                              <div style={{fontSize:13,fontWeight:700,color:C.inkMid}}>{item.routeNm}</div>
                             </div>
                           )}
                         </div>
