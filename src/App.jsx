@@ -58,64 +58,55 @@ function WIcon({t,size=15}){
   return <Cloud size={size} strokeWidth={1.8} color={C.inkLight}/>;
 }
 
-/* ── DatePicker: 네이티브 input 방식 — 에러 없음 ── */
+/* ── DatePicker: 네이티브 input 방식 ── */
 function DatePicker({selectedDate,onChange}){
-  const inputRef=useRef(null);
-
-  /* YYYY-MM-DD 형식 */
-  const toValue=d=>{
-    const y=d.getFullYear();
-    const m=String(d.getMonth()+1).padStart(2,"0");
-    const day=String(d.getDate()).padStart(2,"0");
+  const toValue = d => {
+    if(!(d instanceof Date)) return "";
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,"0");
+    const day = String(d.getDate()).padStart(2,"0");
     return `${y}-${m}-${day}`;
   };
 
-  const handleChange=e=>{
+  const handleChange = e => {
     if(!e.target.value) return;
-    /* "YYYY-MM-DD" → 로컬 자정 Date */
-    const [y,m,d]=e.target.value.split("-").map(Number);
-    const date=new Date(y,m-1,d);
+    const [y,m,d] = e.target.value.split("-").map(Number);
+    const date = new Date(y, m-1, d);
     date.setHours(0,0,0,0);
     onChange(date);
   };
 
-  const today=new Date(); today.setHours(0,0,0,0);
-  const isToday=selectedDate instanceof Date&&selectedDate.getTime()===today.getTime();
-  const label=isToday
-    ?"오늘"
-    :selectedDate instanceof Date
-      ?selectedDate.toLocaleDateString("ko-KR",{month:"long",day:"numeric",weekday:"short"})
-      :"날짜 선택";
-
   return(
     <div style={{position:"relative",display:"inline-block"}}>
-      {/* 스타일 버튼 */}
-      <button
-        onClick={()=>inputRef.current?.showPicker?.()}
-        style={{
-          display:"flex",alignItems:"center",gap:6,
-          background:C.white,border:`1.5px solid ${C.inkFaint}`,
-          borderRadius:10,padding:"8px 14px",cursor:"pointer",
-          color:C.inkMid,fontSize:14,fontWeight:600,
-          boxShadow:"0 1px 4px rgba(0,0,0,0.05)",
-          position:"relative",zIndex:1,
-        }}>
+      {/* 시각 레이어 — pointerEvents none으로 클릭을 input에 전달 */}
+      <div style={{
+        display:"flex",alignItems:"center",gap:6,
+        background:C.white,border:`1.5px solid ${C.inkFaint}`,
+        borderRadius:10,padding:"8px 14px",
+        color:C.inkMid,fontSize:14,fontWeight:600,
+        boxShadow:"0 1px 4px rgba(0,0,0,0.05)",
+        pointerEvents:"none",
+        userSelect:"none",
+        whiteSpace:"nowrap",
+      }}>
         <Calendar size={14} strokeWidth={2} color={C.deep}/>
         날짜 선택
         <ChevronDown size={13} strokeWidth={2.5} color={C.inkLight}/>
-      </button>
-      {/* 숨겨진 네이티브 date input — opacity:0.01 (iOS에서 opacity:0은 터치 무시됨) */}
+      </div>
+      {/* 네이티브 date input — 전면에서 모든 탭 수신 */}
       <input
-        ref={inputRef}
         type="date"
-        value={selectedDate instanceof Date ? toValue(selectedDate) : ""}
+        value={toValue(selectedDate)}
         onChange={handleChange}
         style={{
-          position:"absolute",top:0,left:0,
-          width:"100%",height:"100%",
-          opacity:0.01,cursor:"pointer",
-          zIndex:2,
-          WebkitAppearance:"none",
+          position:"absolute",
+          inset:0,
+          width:"100%",
+          height:"100%",
+          opacity:0,
+          cursor:"pointer",
+          fontSize:16,   /* iOS 자동 확대 방지 */
+          border:"none",
         }}
       />
     </div>

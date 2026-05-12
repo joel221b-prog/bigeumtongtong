@@ -54,14 +54,21 @@ exports.handler = async (event) => {
     const all  = Array.isArray(raw) ? raw : (raw && Object.keys(raw).length ? [raw] : []);
     console.log("[ferry] 전체 항목:", all.length);
 
-    /* 출항지(oport_nm)로 필터링 — depPort는 이미 "가산" 또는 "남강" */
-    const keyword = depPort || null;
+    /* 출항지 + 목적지 동시 필터링 → 가산↔남강 노선만 */
+    const ROUTE_MAP = {
+      "가산": { dep: "가산", dest: "남강" },
+      "남강": { dep: "남강", dest: "가산" },
+    };
+    const route = ROUTE_MAP[depPort];
 
-    const items = keyword
-      ? all.filter(item => (item.oport_nm ?? "").includes(keyword))
+    const items = route
+      ? all.filter(item =>
+          (item.oport_nm ?? "").includes(route.dep) &&
+          (item.dest_nm  ?? "").includes(route.dest)
+        )
       : all;
 
-    console.log("[ferry] 필터 후:", items.length, "/ keyword:", keyword);
+    console.log("[ferry] 필터 후:", items.length, "/ 출항:", route?.dep, "→ 목적지:", route?.dest);
 
     /* 출발 시간 기준 정렬 */
     items.sort((a, b) => Number(a.sail_tm ?? 0) - Number(b.sail_tm ?? 0));
