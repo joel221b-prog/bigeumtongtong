@@ -58,14 +58,15 @@ function WIcon({t,size=15}){
   return <Cloud size={size} strokeWidth={1.8} color={C.inkLight}/>;
 }
 
-/* ── DatePicker: 네이티브 input 방식 ── */
+/* ── DatePicker: label 방식 — Safari/Chrome/Samsung 모두 호환 ── */
 function DatePicker({selectedDate,onChange}){
   const toValue = d => {
     if(!(d instanceof Date)) return "";
-    const y = d.getFullYear();
-    const m = String(d.getMonth()+1).padStart(2,"0");
-    const day = String(d.getDate()).padStart(2,"0");
-    return `${y}-${m}-${day}`;
+    return [
+      d.getFullYear(),
+      String(d.getMonth()+1).padStart(2,"0"),
+      String(d.getDate()).padStart(2,"0"),
+    ].join("-");
   };
 
   const handleChange = e => {
@@ -76,40 +77,42 @@ function DatePicker({selectedDate,onChange}){
     onChange(date);
   };
 
+  /* label 클릭 → 내부 input 자동 활성화 (Safari·Chrome·Samsung 모두 동작) */
   return(
-    <div style={{position:"relative",display:"inline-block"}}>
-      {/* 시각 레이어 — pointerEvents none으로 클릭을 input에 전달 */}
+    <label style={{position:"relative",display:"inline-block",cursor:"pointer"}}>
+      {/* 시각 레이어 */}
       <div style={{
         display:"flex",alignItems:"center",gap:6,
         background:C.white,border:`1.5px solid ${C.inkFaint}`,
         borderRadius:10,padding:"8px 14px",
         color:C.inkMid,fontSize:14,fontWeight:600,
         boxShadow:"0 1px 4px rgba(0,0,0,0.05)",
-        pointerEvents:"none",
-        userSelect:"none",
-        whiteSpace:"nowrap",
+        pointerEvents:"none",userSelect:"none",whiteSpace:"nowrap",
       }}>
         <Calendar size={14} strokeWidth={2} color={C.deep}/>
         날짜 선택
         <ChevronDown size={13} strokeWidth={2.5} color={C.inkLight}/>
       </div>
-      {/* 네이티브 date input — 전면에서 모든 탭 수신 */}
+      {/* 네이티브 date input */}
       <input
         type="date"
         value={toValue(selectedDate)}
         onChange={handleChange}
         style={{
           position:"absolute",
-          inset:0,
-          width:"100%",
-          height:"100%",
-          opacity:0.01,
+          top:0,left:0,
+          width:"100%",height:"100%",
+          opacity:0.01,          /* 0이면 일부 브라우저 터치 무시 */
           cursor:"pointer",
-          fontSize:16,   /* iOS 자동 확대 방지 */
+          fontSize:16,           /* iOS 자동 확대 방지 */
           border:"none",
+          background:"transparent",
+          WebkitAppearance:"none",
+          MozAppearance:"none",
+          appearance:"none",
         }}
       />
-    </div>
+    </label>
   );
 }
 
@@ -133,8 +136,10 @@ export default function App(){
   /* 주간 날씨 상태 */
   const [weekly,setWeekly]     =useState([]);
   const [weatherLoading,setWeatherLoading]=useState(true);
+  const [realWeather,setRealWeather]=useState(null); // 기상청 현재 기상
 
-  /* 출발항 매핑 */
+  /* 법적 고지 모달 */
+  const [legalModal,setLegalModal]=useState(null); // null | "privacy" | "terms"
   const DEP_PORT = {
     "가산→남강":"가산",
     "남강→가산":"남강",
@@ -170,36 +175,38 @@ export default function App(){
   useEffect(()=>{fetchSchedule(route,selDate)},[route,selDate,fetchSchedule]);
   useEffect(()=>{const t=setInterval(()=>setTime(new Date()),1000);return()=>clearInterval(t)},[]);
 
-  /* Open-Meteo 날씨 fetch — 비금도 좌표 34.50, 126.01 */
+  /* 기상청 단기예보 날씨 fetch */
   useEffect(()=>{
     const fetchWeather = async () => {
       setWeatherLoading(true);
       try {
-        const [forecast, marine] = await Promise.all([
-          fetch("https://api.open-meteo.com/v1/forecast?latitude=34.50&longitude=126.01&daily=temperature_2m_max,weathercode&timezone=Asia%2FSeoul").then(r=>r.json()),
-          fetch("https://marine-api.open-meteo.com/v1/marine?latitude=34.50&longitude=126.01&daily=wave_height_max&timezone=Asia%2FSeoul").then(r=>r.json()),
-        ]);
+        const res  = await fetch("/api/weather");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
 
-        const days    = forecast.daily.time;          // ["2025-05-12", ...]
-        const temps   = forecast.daily.temperature_2m_max;
-        const codes   = forecast.daily.weathercode;
-        const waves   = marine.daily.wave_height_max;
-        const todayStr= new Date().toISOString().slice(0,10);
+        const todayStr = new Date().toISOString().slice(0,10).replace(/-/g,"");
 
-        const result = days.slice(0,7).map((dateStr, i) => {
-          const d = new Date(dateStr);
+        const result = (data.daily || []).map(d => {
+          // "20260513" → Date
+          const dateObj = new Date(
+            `${d.date.slice(0,4)}-${d.date.slice(4,6)}-${d.date.slice(6,8)}`
+          );
           return {
-            day:   DAY_LABELS[d.getDay()],
-            icon:  toIcon(codes[i]),
-            high:  Math.round(temps[i]),
-            wave:  Math.round((waves[i] || 0) * 10) / 10,
-            today: dateStr === todayStr,
+            day:   DAY_LABELS[dateObj.getDay()],
+            icon:  d.type,           // "sun" | "cloud" | "rain"
+            high:  d.tmax,
+            wave:  d.waveH ?? 0,
+            today: d.date === todayStr,
           };
         });
         setWeekly(result);
+
+        /* 현재 기상 정보 헤더 표시용 */
+        if (data.current) setRealWeather(data.current);
+
       } catch(e) {
         console.error("날씨 fetch 실패:", e);
-        // 실패해도 빈 배열로 — UI는 로딩 스피너 없이 조용히 처리
       } finally {
         setWeatherLoading(false);
       }
@@ -222,10 +229,18 @@ export default function App(){
   const allDone      =isToday&&!allCancelled&&schedule.length>0&&schedule.every(s=>s.status==="완료"||s.status==="결항");
 
   const weather = allCancelled
-    ?{label:"풍랑주의보",color:C.red,  dot:C.red,  bg:"rgba(192,57,43,0.15)",wind:"북서 12m/s",wave:"파고 3.5m"}
+    ?{label:"풍랑주의보",color:C.red,  dot:C.red,  bg:"rgba(192,57,43,0.15)"}
     :someCancelled
-    ?{label:"기상악화 주의",color:C.orange,dot:C.orange,bg:"rgba(208,96,32,0.12)",wind:"북서 8m/s",wave:"파고 2.0m"}
-    :{label:"기상 양호",  color:C.deep, dot:C.deep, bg:"rgba(74,173,160,0.15)",wind:"북서 3m/s", wave:"파고 0.5m"};
+    ?{label:"기상악화 주의",color:C.orange,dot:C.orange,bg:"rgba(208,96,32,0.12)"}
+    :{label:"기상 양호",  color:C.deep, dot:C.deep, bg:"rgba(74,173,160,0.15)"};
+
+  /* 헤더 기상 표시값 — 실제 기상청 데이터 우선, 없으면 placeholder */
+  const windLabel = realWeather?.windDir && realWeather?.windSpeed != null
+    ? `${realWeather.windDir} ${realWeather.windSpeed}m/s`
+    : "풍속 -";
+  const waveLabel = realWeather?.waveH != null
+    ? `파고 ${realWeather.waveH}m`
+    : "파고 -";
 
   const dateLabel=isToday?"오늘":selDate.toLocaleDateString("ko-KR",{month:"long",day:"numeric",weekday:"short"});
 
@@ -263,16 +278,28 @@ export default function App(){
         </div>
       </div>
 
+      {/* ── 헤더 하단 파도 ── */}
+      <div style={{background:`linear-gradient(135deg,#3a9e96 0%,${C.mid} 100%)`,marginTop:-1}}>
+        <svg viewBox="0 0 480 44" xmlns="http://www.w3.org/2000/svg"
+          preserveAspectRatio="none"
+          style={{display:"block",width:"100%",height:44}}>
+          <path d="M0,12 Q60,36 120,18 Q180,0 240,22 Q300,44 360,24 Q420,4 480,18 L480,44 L0,44 Z"
+            fill={C.bg}/>
+          <path d="M0,18 Q60,44 120,26 Q180,8 240,30 Q300,52 360,32 Q420,12 480,26 L480,44 L0,44 Z"
+            fill={C.bg} opacity="0.55"/>
+        </svg>
+      </div>
+
       {/* ── 날씨 + 새로고침 ── */}
       <div style={{background:C.white,borderBottom:`1px solid ${C.inkFaint}`,padding:"10px 18px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div style={{display:"flex",gap:14,alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:5}}>
             <Wind size={14} strokeWidth={1.8} color={C.mid}/>
-            <span style={{fontSize:13,color:C.inkMid,fontWeight:600}}>{weather.wind}</span>
+            <span style={{fontSize:13,color:C.inkMid,fontWeight:600}}>{windLabel}</span>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:5}}>
             <Waves size={14} strokeWidth={1.8} color={C.mid}/>
-            <span style={{fontSize:13,color:C.inkMid,fontWeight:600}}>{weather.wave}</span>
+            <span style={{fontSize:13,color:C.inkMid,fontWeight:600}}>{waveLabel}</span>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:5}}>
             <span style={{width:7,height:7,borderRadius:"50%",background:weather.dot,display:"inline-block",boxShadow:`0 0 0 2.5px ${weather.bg}`}}/>
@@ -523,7 +550,8 @@ export default function App(){
                             {[
                               ["출발", item.dep || "--:--"],
                               ["도착", item.arr || "--:--"],
-                              ["정원", item.seats > 0 ? `${item.seats}명` : "-"],
+                              ["여객정원", item.seats > 0 ? `${item.seats}명` : "-"],
+                              ["차량정원", item.carCap > 0 ? `${item.carCap}대` : "-"],
                             ].map(([l,v])=>(
                               <div key={l} style={{background:C.bg,borderRadius:10,padding:"9px 12px",border:`1px solid ${C.inkFaint}`}}>
                                 <div style={{fontSize:10,color:C.inkLight,marginBottom:3}}>{l}</div>
@@ -602,19 +630,118 @@ export default function App(){
           </div>
         )}
 
-        {/* ── 출처 표시 ── */}
+        {/* ── 출처 + 법적 고지 ── */}
         <div style={{
-          marginBottom:20,padding:"10px 14px",
+          marginBottom:8,padding:"12px 14px",
           background:"rgba(255,255,255,0.6)",
           borderRadius:12,border:`1px solid ${C.inkFaint}`,
         }}>
           <div style={{fontSize:10,color:C.inkLight,lineHeight:1.8}}>
             <div>⛴ 배편 시간표: 한국해양교통안전공단(KOMSA) · 공공데이터포털 제공</div>
-            <div>🌤 날씨·파고: Open-Meteo (open-meteo.com) · 무료 기상 오픈 API</div>
+            <div>🌤 날씨·파고: 기상청 단기예보 · 공공데이터포털 제공</div>
             <div style={{marginTop:4,color:C.inkFaint}}>실제 운항 여부는 당일 반드시 재확인하세요</div>
           </div>
         </div>
+
+        {/* ── 법적 링크 ── */}
+        <div style={{
+          display:"flex",justifyContent:"center",gap:16,
+          padding:"12px 0 24px",
+        }}>
+          {[["privacy","개인정보처리방침"],["terms","이용약관"]].map(([key,label])=>(
+            <button key={key} onClick={()=>setLegalModal(key)} style={{
+              background:"none",border:"none",padding:0,cursor:"pointer",
+              fontSize:11,color:C.inkLight,textDecoration:"underline",
+              textUnderlineOffset:3,fontFamily:"inherit",
+            }}>{label}</button>
+          ))}
+        </div>
       </div>
+
+      {/* ── 법적 고지 모달 ── */}
+      {legalModal&&(
+        <div onClick={()=>setLegalModal(null)} style={{
+          position:"fixed",inset:0,zIndex:500,
+          background:"rgba(0,0,0,0.55)",backdropFilter:"blur(4px)",
+          display:"flex",alignItems:"flex-end",justifyContent:"center",
+        }}>
+          <div onClick={e=>e.stopPropagation()} style={{
+            width:"100%",maxWidth:480,maxHeight:"82vh",
+            background:C.white,borderRadius:"24px 24px 0 0",
+            overflow:"hidden",display:"flex",flexDirection:"column",
+          }}>
+            {/* 모달 헤더 */}
+            <div style={{
+              padding:"16px 20px 14px",
+              borderBottom:`1px solid ${C.inkFaint}`,
+              display:"flex",justifyContent:"space-between",alignItems:"center",
+              flexShrink:0,
+            }}>
+              <span style={{fontSize:16,fontWeight:800,color:C.ink}}>
+                {legalModal==="privacy"?"개인정보처리방침":"이용약관"}
+              </span>
+              <button onClick={()=>setLegalModal(null)} style={{
+                background:C.pale,border:"none",borderRadius:50,
+                width:32,height:32,cursor:"pointer",fontSize:16,
+                display:"flex",alignItems:"center",justifyContent:"center",
+              }}>✕</button>
+            </div>
+            {/* 모달 내용 */}
+            <div style={{overflowY:"auto",padding:"20px",fontSize:13,color:C.inkMid,lineHeight:1.9}}>
+              {legalModal==="privacy"?(
+                <>
+                  <p style={{fontSize:12,color:C.inkLight,marginBottom:16}}>시행일: 2026년 5월 13일</p>
+
+                  <h3 style={{fontSize:14,fontWeight:800,color:C.ink,margin:"0 0 8px"}}>1. 수집하는 개인정보</h3>
+                  <p style={{marginBottom:16}}>비금통통은 회원가입, 로그인, 개인 식별 등의 절차가 없으며 <strong>어떠한 개인정보도 수집하지 않습니다.</strong></p>
+
+                  <h3 style={{fontSize:14,fontWeight:800,color:C.ink,margin:"0 0 8px"}}>2. 이용하는 외부 서비스</h3>
+                  <p style={{marginBottom:4}}>앱은 다음 공공 API를 활용합니다.</p>
+                  <ul style={{paddingLeft:18,marginBottom:16}}>
+                    <li>한국해양교통안전공단(KOMSA) 운항 스케줄 API — 공공데이터포털 제공</li>
+                    <li>기상청 단기예보 API — 공공데이터포털 제공</li>
+                    <li>Netlify (서버 호스팅) — 서버 로그에 IP 주소가 일시 기록될 수 있습니다</li>
+                  </ul>
+
+                  <h3 style={{fontSize:14,fontWeight:800,color:C.ink,margin:"0 0 8px"}}>3. 쿠키 및 추적</h3>
+                  <p style={{marginBottom:16}}>비금통통은 쿠키, 광고 추적, 분석 도구를 사용하지 않습니다.</p>
+
+                  <h3 style={{fontSize:14,fontWeight:800,color:C.ink,margin:"0 0 8px"}}>4. 문의</h3>
+                  <p>개인정보 관련 문의는 앱 스토어 개발자 연락처로 해주세요.</p>
+                </>
+              ):(
+                <>
+                  <p style={{fontSize:12,color:C.inkLight,marginBottom:16}}>시행일: 2026년 5월 13일</p>
+
+                  <h3 style={{fontSize:14,fontWeight:800,color:C.ink,margin:"0 0 8px"}}>1. 서비스 목적</h3>
+                  <p style={{marginBottom:16}}>비금통통은 비금도(가산항) ↔ 암태도(남강항) 간 여객선 운항 시간표 및 기상 정보를 제공하는 비공식 정보 서비스입니다.</p>
+
+                  <h3 style={{fontSize:14,fontWeight:800,color:C.ink,margin:"0 0 8px"}}>2. 정보의 정확성 면책</h3>
+                  <p style={{marginBottom:8}}>표시되는 운항 정보는 공공데이터포털(한국해양교통안전공단)에서 제공하는 데이터를 기반으로 하며, 다음과 같은 이유로 실제 운항과 차이가 있을 수 있습니다.</p>
+                  <ul style={{paddingLeft:18,marginBottom:16}}>
+                    <li>기상 악화, 기계 결함 등 돌발 상황에 의한 결항</li>
+                    <li>선사의 사정에 따른 시간표 변경</li>
+                    <li>API 데이터 갱신 지연</li>
+                  </ul>
+                  <p style={{marginBottom:16,fontWeight:700,color:C.ink}}>승선 전 반드시 해당 선사 또는 터미널에 운항 여부를 확인하시기 바랍니다.</p>
+
+                  <h3 style={{fontSize:14,fontWeight:800,color:C.ink,margin:"0 0 8px"}}>3. 책임 한계</h3>
+                  <p style={{marginBottom:16}}>비금통통은 제공된 정보를 이용함으로써 발생하는 직·간접적 손해에 대해 법적 책임을 지지 않습니다.</p>
+
+                  <h3 style={{fontSize:14,fontWeight:800,color:C.ink,margin:"0 0 8px"}}>4. 데이터 출처</h3>
+                  <ul style={{paddingLeft:18,marginBottom:16}}>
+                    <li>배편 정보: 한국해양교통안전공단(KOMSA) / 공공데이터포털</li>
+                    <li>날씨·파고: 기상청 / 공공데이터포털</li>
+                  </ul>
+
+                  <h3 style={{fontSize:14,fontWeight:800,color:C.ink,margin:"0 0 8px"}}>5. 약관 변경</h3>
+                  <p>약관은 서비스 개선에 따라 변경될 수 있으며, 변경 시 앱 내 공지를 통해 안내합니다.</p>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes pulse{0%,100%{box-shadow:0 0 0 4px rgba(74,173,160,0.18)}50%{box-shadow:0 0 0 8px rgba(74,173,160,0)}}

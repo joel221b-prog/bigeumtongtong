@@ -66,15 +66,15 @@ exports.handler = async (event) => {
     const all  = Array.isArray(raw) ? raw : (raw && Object.keys(raw).length ? [raw] : []);
     console.log("[ferry] 전체 항목:", all.length);
 
-    /* 필터:
-       - 출항지(oport_nm)가 depPort(가산 or 남강) 포함
-       - 운항항로명(nvg_seawy_nm)에 "가산"과 "남강" 모두 포함 */
+    /* 필터: 면허항로명(lcns_seawy_nm)에 가산+남강 포함 + 출항지 일치
+       - 직항(남강-가산): lcns_seawy_nm = "남강-가산" → 포함
+       - 도초카훼리(도초-목포): lcns_seawy_nm = "도초-목포" → 가산/남강 없음 → 제외 */
     const items = all.filter(item => {
-      const oport    = item.oport_nm    ?? "";
-      const nvgSeawy = item.nvg_seawy_nm ?? "";
-      const depMatch  = oport.includes(depPort);
-      const routeMatch = nvgSeawy.includes("가산") && nvgSeawy.includes("남강");
-      return depMatch && routeMatch;
+      const lcns  = item.lcns_seawy_nm ?? "";
+      const oport = item.oport_nm      ?? "";
+      const licenseMatch = lcns.includes("가산") && lcns.includes("남강");
+      const depMatch     = oport.includes(depPort);
+      return licenseMatch && depMatch;
     });
 
     console.log("[ferry] 필터 후:", items.length, "/ 출항:", depPort);
@@ -82,11 +82,13 @@ exports.handler = async (event) => {
     /* 출발 시간 기준 정렬 */
     items.sort((a, b) => Number(a.sail_tm ?? 0) - Number(b.sail_tm ?? 0));
 
-    // 첫 항목 로그 — 운항항로 필드 확인용
     if (items.length > 0) {
       const s = items[0];
       console.log("[ferry] 첫항목 lcns_seawy_nm:", s.lcns_seawy_nm,
         "/ nvg_seawy_nm:", s.nvg_seawy_nm, "/ nvg_se_nm:", s.nvg_se_nm);
+      console.log("[ferry] 정원 필드 확인 — psngr_cap:", s.psngr_cap,
+        "/ psnshp_cap:", s.psnshp_cap, "/ car_cap:", s.car_cap,
+        "/ vhcl_cap:", s.vhcl_cap, "/ 전체키:", Object.keys(s).join(","));
     }
 
     const schedule = items.map((item, idx) => {
@@ -100,13 +102,14 @@ exports.handler = async (event) => {
         dep:      fmtTime(item.sail_tm),
         arr:      item.arvl_tm ? fmtTime(item.arvl_tm) : addMinutes(item.sail_tm, 40), // API 없으면 +40분
         vessel:   item.psnshp_nm    ?? "정보없음",
-        seats:    Number(item.psngr_cap ?? item.psnshp_cap ?? 0),
+        seats:    Number(item.psngr_cap ?? item.psnshp_cap ?? item.psnger_cap ?? item.psg_cap ?? 0),
+        carCap:   Number(item.car_cap   ?? item.vhcl_cap   ?? item.cago_cap   ?? 0), // 차량 정원
         status,
         reason:   item.cntrl_rsn_nm ?? "",
         depPort:  item.oport_nm     ?? "",
         destPort: item.dest_nm      ?? "",
-        routeNm:  item.lcns_seawy_nm ?? "",  // 면허항로명 (예: 남강-가산)
-        nvgSeawy: item.nvg_seawy_nm ?? "",   // 운항항로명 상세
+        routeNm:  item.nvg_seawy_nm  ?? "",   // 운항항로명 (표시용: 남강-가산(수치)-도초 등)
+        lcnsNm:   item.lcns_seawy_nm ?? "",   // 면허항로명 (필터용: 남강-가산)
         nvgSe:    item.nvg_se_nm    ?? "",   // 운항구분 (정상/비운/증회)
       };
     });
