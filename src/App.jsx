@@ -517,10 +517,11 @@ export default function App(){
 
                       {isOpen&&(
                         <div style={{padding:"12px 16px 14px 66px",borderTop:`1px solid ${C.pale}`}}>
-                          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:8}}>
                             {[
-                              ["출발",item.dep],["도착",item.arr],["소요","약 80분"],
-                              ["정원",`${item.seats}명`],["차량","가능"],["선종","카페리"],
+                              ["출발", item.dep || "--:--"],
+                              ["도착", item.arr || "--:--"],
+                              ["정원", item.seats > 0 ? `${item.seats}명` : "-"],
                             ].map(([l,v])=>(
                               <div key={l} style={{background:C.bg,borderRadius:10,padding:"9px 12px",border:`1px solid ${C.inkFaint}`}}>
                                 <div style={{fontSize:10,color:C.inkLight,marginBottom:3}}>{l}</div>
@@ -528,6 +529,13 @@ export default function App(){
                               </div>
                             ))}
                           </div>
+                          {/* 운항항로명 */}
+                          {item.nvgType&&(
+                            <div style={{background:C.bg,borderRadius:10,padding:"9px 12px",border:`1px solid ${C.inkFaint}`}}>
+                              <div style={{fontSize:10,color:C.inkLight,marginBottom:3}}>운항항로</div>
+                              <div style={{fontSize:13,fontWeight:700,color:C.inkMid,wordBreak:"break-all"}}>{item.nvgType}</div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

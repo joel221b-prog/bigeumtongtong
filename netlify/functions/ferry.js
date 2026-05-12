@@ -54,23 +54,18 @@ exports.handler = async (event) => {
     const all  = Array.isArray(raw) ? raw : (raw && Object.keys(raw).length ? [raw] : []);
     console.log("[ferry] 전체 항목:", all.length);
 
-    /* 면허항로 "남강-가산" + 출항지(가산 or 남강)만 필터링 */
-    const DIRECT_ROUTE = "남강-가산";
-
-    const filtered = all.filter(item => {
-      const seawy = item.lcns_seawy_nm ?? "";
-      const oport = item.oport_nm      ?? "";
-      const isDirectRoute = seawy === DIRECT_ROUTE || seawy === "가산-남강";
-      const isOurPort     = oport.includes("가산") || oport.includes("남강");
-      return isDirectRoute && isOurPort;
+    /* 필터:
+       - 출항지(oport_nm)가 depPort(가산 or 남강) 포함
+       - 운항항로명(nvg_seawy_nm)에 "가산"과 "남강" 모두 포함 */
+    const items = all.filter(item => {
+      const oport    = item.oport_nm    ?? "";
+      const nvgSeawy = item.nvg_seawy_nm ?? "";
+      const depMatch  = oport.includes(depPort);
+      const routeMatch = nvgSeawy.includes("가산") && nvgSeawy.includes("남강");
+      return depMatch && routeMatch;
     });
 
-    /* 탭에 맞는 출항지만 추가 필터 */
-    const items = depPort
-      ? filtered.filter(item => (item.oport_nm ?? "").includes(depPort))
-      : filtered;
-
-    console.log("[ferry] 직항 필터:", filtered.length, "/ 탭 필터 후:", items.length, "/ 출항:", depPort);
+    console.log("[ferry] 필터 후:", items.length, "/ 출항:", depPort);
 
     /* 출발 시간 기준 정렬 */
     items.sort((a, b) => Number(a.sail_tm ?? 0) - Number(b.sail_tm ?? 0));
