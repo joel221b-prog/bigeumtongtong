@@ -2,9 +2,9 @@
  * Netlify Function: ferry.js
  * KOMSA 운항 스케줄 API 프록시
  *
- * ✅ 확인된 실제 응답 필드 (snake_case):
- *   rlvt_ymd, sail_tm, psnshp_nm, oport_nm, dest_nm,
- *   lcns_seawy_nm, nvg_seawy_nm, nvg_drc_nm, nvg_se_cd ...
+ * 확인된 API 필드: rlvt_ymd, sail_tm, psnshp_nm, oport_nm, dest_nm,
+ *   lcns_seawy_nm, nvg_seawy_nm, nvg_se_nm, nvg_stts_nm, cntrl_rsn_nm
+ * ※ 정원(psngr_cap, car_cap) 필드는 이 API에 존재하지 않음
  */
 
 /* "830" → "08:30" */
@@ -14,16 +14,12 @@ function fmtTime(t) {
   return `${s.slice(0, 2)}:${s.slice(2, 4)}`;
 }
 
-/* 출발시각(숫자) + 분 → "HH:MM" */
+/* 출발시각 + 분 → "HH:MM" */
 function addMinutes(sailTm, min) {
   if (!sailTm) return "";
   const s   = String(sailTm).padStart(4, "0");
-  const h   = parseInt(s.slice(0, 2), 10);
-  const m   = parseInt(s.slice(2, 4), 10);
-  const tot = h * 60 + m + min;
-  const rh  = Math.floor(tot / 60) % 24;
-  const rm  = tot % 60;
-  return `${String(rh).padStart(2,"0")}:${String(rm).padStart(2,"0")}`;
+  const tot = parseInt(s.slice(0,2),10)*60 + parseInt(s.slice(2,4),10) + min;
+  return `${String(Math.floor(tot/60)%24).padStart(2,"0")}:${String(tot%60).padStart(2,"0")}`;
 }
 
 exports.handler = async (event) => {
@@ -39,7 +35,7 @@ exports.handler = async (event) => {
     const params = new URLSearchParams({
       serviceKey: API_KEY,
       pageNo:     "1",
-      numOfRows:  "1000",  // 전국 모든 항로 포함 → 충분히 크게
+      numOfRows:  "1000",
       dataType:   "JSON",
       rlvtYmd:    date,
     });
@@ -56,61 +52,40 @@ exports.handler = async (event) => {
 
     const resultCode = data?.response?.header?.resultCode;
     if (resultCode && resultCode !== "00" && resultCode !== "200") {
-      return res(502, {
-        error: `KOMSA 오류: ${data?.response?.header?.resultMsg}`,
-        code: resultCode,
-      });
+      return res(502, { error: `KOMSA 오류: ${data?.response?.header?.resultMsg}`, code: resultCode });
     }
 
-    const raw  = data?.response?.body?.items?.item ?? [];
-    const all  = Array.isArray(raw) ? raw : (raw && Object.keys(raw).length ? [raw] : []);
+    const raw = data?.response?.body?.items?.item ?? [];
+    const all = Array.isArray(raw) ? raw : (raw && Object.keys(raw).length ? [raw] : []);
     console.log("[ferry] 전체 항목:", all.length);
 
-    /* 필터: 면허항로명(lcns_seawy_nm)에 가산+남강 포함 + 출항지 일치
-       - 직항(남강-가산): lcns_seawy_nm = "남강-가산" → 포함
-       - 도초카훼리(도초-목포): lcns_seawy_nm = "도초-목포" → 가산/남강 없음 → 제외 */
+    /* 필터: 면허항로명(lcns_seawy_nm)에 가산+남강 포함 + 출항지 일치 */
     const items = all.filter(item => {
       const lcns  = item.lcns_seawy_nm ?? "";
       const oport = item.oport_nm      ?? "";
-      const licenseMatch = lcns.includes("가산") && lcns.includes("남강");
-      const depMatch     = oport.includes(depPort);
-      return licenseMatch && depMatch;
+      return lcns.includes("가산") && lcns.includes("남강") && oport.includes(depPort);
     });
 
+    items.sort((a, b) => Number(a.sail_tm ?? 0) - Number(b.sail_tm ?? 0));
     console.log("[ferry] 필터 후:", items.length, "/ 출항:", depPort);
 
-    /* 출발 시간 기준 정렬 */
-    items.sort((a, b) => Number(a.sail_tm ?? 0) - Number(b.sail_tm ?? 0));
-
-    if (items.length > 0) {
-      const s = items[0];
-      console.log("[ferry] 첫항목 lcns_seawy_nm:", s.lcns_seawy_nm,
-        "/ nvg_seawy_nm:", s.nvg_seawy_nm, "/ nvg_se_nm:", s.nvg_se_nm);
-      console.log("[ferry] 정원 필드 확인 — psngr_cap:", s.psngr_cap,
-        "/ psnshp_cap:", s.psnshp_cap, "/ car_cap:", s.car_cap,
-        "/ vhcl_cap:", s.vhcl_cap, "/ 전체키:", Object.keys(s).join(","));
-    }
-
     const schedule = items.map((item, idx) => {
-      const raw = item.nvg_stts_nm ?? "";
-      const status = raw.includes("운항중") ? "운항중"
-                   : raw.includes("완료")   ? "완료"
-                   : (item.cntrl_rsn_nm || raw.includes("통제") || raw.includes("결항")) ? "결항"
+      const stts   = item.nvg_stts_nm ?? "";
+      const status = stts.includes("운항중") ? "운항중"
+                   : stts.includes("완료")   ? "완료"
+                   : (item.cntrl_rsn_nm || stts.includes("통제") || stts.includes("결항")) ? "결항"
                    : "예정";
       return {
         id:       idx + 1,
         dep:      fmtTime(item.sail_tm),
-        arr:      item.arvl_tm ? fmtTime(item.arvl_tm) : addMinutes(item.sail_tm, 40), // API 없으면 +40분
+        arr:      addMinutes(item.sail_tm, 40), // API에 도착시각 없음 → +40분
         vessel:   item.psnshp_nm    ?? "정보없음",
-        seats:    Number(item.psngr_cap ?? item.psnshp_cap ?? item.psnger_cap ?? item.psg_cap ?? 0),
-        carCap:   Number(item.car_cap   ?? item.vhcl_cap   ?? item.cago_cap   ?? 0), // 차량 정원
         status,
         reason:   item.cntrl_rsn_nm ?? "",
         depPort:  item.oport_nm     ?? "",
         destPort: item.dest_nm      ?? "",
-        routeNm:  item.nvg_seawy_nm  ?? "",   // 운항항로명 (표시용: 남강-가산(수치)-도초 등)
-        lcnsNm:   item.lcns_seawy_nm ?? "",   // 면허항로명 (필터용: 남강-가산)
-        nvgSe:    item.nvg_se_nm    ?? "",   // 운항구분 (정상/비운/증회)
+        routeNm:  item.nvg_seawy_nm ?? item.lcns_seawy_nm ?? "", // 운항항로명
+        nvgSe:    item.nvg_se_nm    ?? "",  // 운항구분 (정상/증회/비운)
       };
     });
 

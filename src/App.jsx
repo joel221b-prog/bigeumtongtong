@@ -58,15 +58,14 @@ function WIcon({t,size=15}){
   return <Cloud size={size} strokeWidth={1.8} color={C.inkLight}/>;
 }
 
-/* ── DatePicker: label 방식 — Safari/Chrome/Samsung 모두 호환 ── */
+/* ── DatePicker: Chrome/iOS/Samsung 모두 지원 ── */
 function DatePicker({selectedDate,onChange}){
+  const inputRef = useRef(null);
+
   const toValue = d => {
     if(!(d instanceof Date)) return "";
-    return [
-      d.getFullYear(),
-      String(d.getMonth()+1).padStart(2,"0"),
-      String(d.getDate()).padStart(2,"0"),
-    ].join("-");
+    return [d.getFullYear(), String(d.getMonth()+1).padStart(2,"0"),
+            String(d.getDate()).padStart(2,"0")].join("-");
   };
 
   const handleChange = e => {
@@ -77,9 +76,22 @@ function DatePicker({selectedDate,onChange}){
     onChange(date);
   };
 
-  /* label 클릭 → 내부 input 자동 활성화 (Safari·Chrome·Samsung 모두 동작) */
+  /* 클릭 시 showPicker() 호출 (Chrome) — input 직접 탭(iOS)도 동작 */
+  const handleClick = e => {
+    e.preventDefault();
+    if(!inputRef.current) return;
+    try { inputRef.current.showPicker(); }
+    catch { inputRef.current.click(); }
+  };
+
   return(
-    <label style={{position:"relative",display:"inline-block",cursor:"pointer"}}>
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={handleClick}
+      onKeyDown={e=>{ if(e.key==="Enter"||e.key===" ") handleClick(e); }}
+      style={{position:"relative",display:"inline-block",cursor:"pointer"}}
+    >
       {/* 시각 레이어 */}
       <div style={{
         display:"flex",alignItems:"center",gap:6,
@@ -93,26 +105,26 @@ function DatePicker({selectedDate,onChange}){
         날짜 선택
         <ChevronDown size={13} strokeWidth={2.5} color={C.inkLight}/>
       </div>
-      {/* 네이티브 date input */}
+      {/* input: opacity 0.01로 탭 가능, iOS Safari 호환 */}
       <input
+        ref={inputRef}
         type="date"
         value={toValue(selectedDate)}
         onChange={handleChange}
+        onClick={e=>e.stopPropagation()} /* 버블링 방지 */
         style={{
           position:"absolute",
           top:0,left:0,
           width:"100%",height:"100%",
-          opacity:0.01,          /* 0이면 일부 브라우저 터치 무시 */
+          opacity:0.01,     /* 0이면 iOS 터치 무시 */
           cursor:"pointer",
-          fontSize:16,           /* iOS 자동 확대 방지 */
+          fontSize:16,      /* iOS 자동 확대 방지 */
           border:"none",
           background:"transparent",
-          WebkitAppearance:"none",
-          MozAppearance:"none",
-          appearance:"none",
+          zIndex:1,
         }}
       />
-    </label>
+    </div>
   );
 }
 
@@ -276,18 +288,6 @@ export default function App(){
             </div>
           </div>
         </div>
-      </div>
-
-      {/* ── 헤더 하단 파도 ── */}
-      <div style={{background:`linear-gradient(135deg,#3a9e96 0%,${C.mid} 100%)`,marginTop:-1}}>
-        <svg viewBox="0 0 480 44" xmlns="http://www.w3.org/2000/svg"
-          preserveAspectRatio="none"
-          style={{display:"block",width:"100%",height:44}}>
-          <path d="M0,12 Q60,36 120,18 Q180,0 240,22 Q300,44 360,24 Q420,4 480,18 L480,44 L0,44 Z"
-            fill={C.bg}/>
-          <path d="M0,18 Q60,44 120,26 Q180,8 240,30 Q300,52 360,32 Q420,12 480,26 L480,44 L0,44 Z"
-            fill={C.bg} opacity="0.55"/>
-        </svg>
       </div>
 
       {/* ── 날씨 + 새로고침 ── */}
@@ -546,12 +546,10 @@ export default function App(){
 
                       {isOpen&&(
                         <div style={{padding:"12px 16px 14px 66px",borderTop:`1px solid ${C.pale}`}}>
-                          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:8}}>
+                          <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginBottom:8}}>
                             {[
                               ["출발", item.dep || "--:--"],
                               ["도착", item.arr || "--:--"],
-                              ["여객정원", item.seats > 0 ? `${item.seats}명` : "-"],
-                              ["차량정원", item.carCap > 0 ? `${item.carCap}대` : "-"],
                             ].map(([l,v])=>(
                               <div key={l} style={{background:C.bg,borderRadius:10,padding:"9px 12px",border:`1px solid ${C.inkFaint}`}}>
                                 <div style={{fontSize:10,color:C.inkLight,marginBottom:3}}>{l}</div>
@@ -631,32 +629,55 @@ export default function App(){
         )}
 
         {/* ── 출처 + 법적 고지 ── */}
+        {/* 푸터 파도 배경 */}
+        <div style={{margin:"0 -18px", overflow:"hidden"}}>
+          <svg viewBox="0 0 480 40" xmlns="http://www.w3.org/2000/svg"
+            preserveAspectRatio="none"
+            style={{display:"block",width:"100%",height:36,marginBottom:-2}}>
+            <path d="M0,28 Q80,4 160,24 Q240,44 320,20 Q400,-4 480,22 L480,40 L0,40 Z"
+              fill={C.light} opacity="0.55"/>
+            <path d="M0,34 Q80,14 160,30 Q240,46 320,28 Q400,10 480,30 L480,40 L0,40 Z"
+              fill={C.light}/>
+          </svg>
+        </div>
         <div style={{
-          marginBottom:8,padding:"12px 14px",
-          background:"rgba(255,255,255,0.6)",
-          borderRadius:12,border:`1px solid ${C.inkFaint}`,
+          margin:"0 -18px",padding:"16px 18px 0",
+          background:C.light,
         }}>
-          <div style={{fontSize:10,color:C.inkLight,lineHeight:1.8}}>
-            <div>⛴ 배편 시간표: 한국해양교통안전공단(KOMSA) · 공공데이터포털 제공</div>
-            <div>🌤 날씨·파고: 기상청 단기예보 · 공공데이터포털 제공</div>
-            <div style={{marginTop:4,color:C.inkFaint}}>실제 운항 여부는 당일 반드시 재확인하세요</div>
+          <div style={{
+            padding:"12px 14px",marginBottom:8,
+            background:"rgba(255,255,255,0.7)",
+            borderRadius:12,border:`1px solid rgba(255,255,255,0.9)`,
+          }}>
+            <div style={{fontSize:10,color:C.inkMid,lineHeight:2}}>
+              <div>⛴ <strong>배편 시간표</strong>: 한국해양교통안전공단(KOMSA) 제공</div>
+              <div style={{fontSize:9,color:C.inkLight,marginLeft:14}}>
+                출처: 공공데이터포털 · 이용허락범위: CC BY (저작자표시)
+              </div>
+              <div>🌤 <strong>날씨·파고</strong>: 기상청 단기예보 제공</div>
+              <div style={{fontSize:9,color:C.inkLight,marginLeft:14}}>
+                출처: 공공데이터포털 · 이용허락범위: 공공저작물 출처표시 (제1유형)
+              </div>
+              <div style={{marginTop:6,paddingTop:6,borderTop:`1px solid ${C.inkFaint}`,color:C.inkLight}}>
+                실제 운항 여부는 당일 반드시 재확인하세요
+              </div>
+            </div>
+          </div>
+
+          {/* 법적 링크 */}
+          <div style={{
+            display:"flex",justifyContent:"center",gap:16,
+            padding:"10px 0 24px",
+          }}>
+            {[["privacy","개인정보처리방침"],["terms","이용약관"]].map(([key,label])=>(
+              <button key={key} onClick={()=>setLegalModal(key)} style={{
+                background:"none",border:"none",padding:0,cursor:"pointer",
+                fontSize:11,color:C.inkMid,textDecoration:"underline",
+                textUnderlineOffset:3,fontFamily:"inherit",
+              }}>{label}</button>
+            ))}
           </div>
         </div>
-
-        {/* ── 법적 링크 ── */}
-        <div style={{
-          display:"flex",justifyContent:"center",gap:16,
-          padding:"12px 0 24px",
-        }}>
-          {[["privacy","개인정보처리방침"],["terms","이용약관"]].map(([key,label])=>(
-            <button key={key} onClick={()=>setLegalModal(key)} style={{
-              background:"none",border:"none",padding:0,cursor:"pointer",
-              fontSize:11,color:C.inkLight,textDecoration:"underline",
-              textUnderlineOffset:3,fontFamily:"inherit",
-            }}>{label}</button>
-          ))}
-        </div>
-      </div>
 
       {/* ── 법적 고지 모달 ── */}
       {legalModal&&(
@@ -728,10 +749,12 @@ export default function App(){
                   <h3 style={{fontSize:14,fontWeight:800,color:C.ink,margin:"0 0 8px"}}>3. 책임 한계</h3>
                   <p style={{marginBottom:16}}>비금통통은 제공된 정보를 이용함으로써 발생하는 직·간접적 손해에 대해 법적 책임을 지지 않습니다.</p>
 
-                  <h3 style={{fontSize:14,fontWeight:800,color:C.ink,margin:"0 0 8px"}}>4. 데이터 출처</h3>
+                  <h3 style={{fontSize:14,fontWeight:800,color:C.ink,margin:"0 0 8px"}}>4. 데이터 출처 및 라이선스</h3>
                   <ul style={{paddingLeft:18,marginBottom:16}}>
-                    <li>배편 정보: 한국해양교통안전공단(KOMSA) / 공공데이터포털</li>
-                    <li>날씨·파고: 기상청 / 공공데이터포털</li>
+                    <li>배편 정보: 한국해양교통안전공단(KOMSA) / 공공데이터포털<br/>
+                      <span style={{fontSize:11,color:C.inkLight}}>이용허락: CC BY (저작자표시) · 공공저작물 출처표시 제1유형</span></li>
+                    <li style={{marginTop:6}}>날씨·파고: 기상청 / 공공데이터포털<br/>
+                      <span style={{fontSize:11,color:C.inkLight}}>이용허락: 공공저작물 출처표시 제1유형</span></li>
                   </ul>
 
                   <h3 style={{fontSize:14,fontWeight:800,color:C.ink,margin:"0 0 8px"}}>5. 약관 변경</h3>
