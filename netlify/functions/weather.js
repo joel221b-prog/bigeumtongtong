@@ -9,8 +9,8 @@
  * ※ 비금도(nx=44, ny=61)는 해상 격자라 기상청 서비스 불가
  */
 
-const NX = 51;  // 목포 격자 X (비금도 인근 최근접 육지 지점)
-const NY = 68;  // 목포 격자 Y
+const NX = 44;  // 비금도 격자 X (전남 신안군 비금면)
+const NY = 61;  // 비금도 격자 Y
 const BASE_URL = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst";
 
 /* KST 기준 발표 시간 (02/05/08/11/14/17/20/23시)

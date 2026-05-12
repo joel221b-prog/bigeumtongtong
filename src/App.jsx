@@ -580,9 +580,9 @@ export default function App(){
             <div style={{display:"flex",alignItems:"center",gap:6}}>
               <Sun size={14} strokeWidth={2} color={C.goldAccent}/>
               <span style={{fontSize:13,fontWeight:800,color:C.ink}}>이번 주 날씨</span>
-              <span style={{fontSize:11,color:C.inkLight}}>비금도 기준</span>
+              <span style={{fontSize:11,color:C.inkLight}}>비금도 인근 기준</span>
             </div>
-            <span style={{fontSize:10,color:C.inkLight}}>출처: Open-Meteo</span>
+            <span style={{fontSize:10,color:C.inkLight}}>출처: 기상청 단기예보</span>
           </div>
           <div style={{background:C.white,borderRadius:14,border:`1px solid ${C.inkFaint}`,padding:"10px 4px",display:"flex",minHeight:72,alignItems:"center",justifyContent:"center"}}>
             {weatherLoading?(
@@ -598,8 +598,11 @@ export default function App(){
                 }}>
                   <span style={{fontSize:12,fontWeight:w.today?800:600,color:w.today?C.deep:C.inkLight}}>{w.day}</span>
                   <WIcon t={w.icon} size={15}/>
-                  <span style={{fontSize:13,fontWeight:700,color:w.today?C.ink:C.inkMid}}>{w.high}°</span>
-                  <span style={{fontSize:10,fontWeight:700,color:w.wave>=3?"#c0392b":w.wave>=1.5?"#c88020":C.deep}}>{w.wave}m</span>
+                  <span style={{fontSize:13,fontWeight:700,color:w.today?C.ink:C.inkMid}}>{w.high != null ? `${w.high}°` : "-"}</span>
+                  {/* 파고: 0이거나 없으면 "-" 표시 */}
+                  <span style={{fontSize:10,fontWeight:700,color:w.wave>=3?"#c0392b":w.wave>=1.5?"#c88020":C.deep}}>
+                    {w.wave > 0 ? `${w.wave}m` : "-"}
+                  </span>
                 </div>
               ))
             )}
