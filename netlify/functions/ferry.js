@@ -2,12 +2,17 @@
  * Netlify Function: ferry.js
  * KOMSA 운항 스케줄 API 프록시
  *
- * ✅ 확인된 파라미터 (data.go.kr 확인 버튼 기준):
- *   - rlvtYmd  : 해당일자 (YYYYMMDD)
- *   - dataType : JSON
- *   - pageNo, numOfRows
- *   출항지 필터 파라미터 없음 → 전체 조회 후 서버에서 필터링
+ * ✅ 확인된 실제 응답 필드 (snake_case):
+ *   rlvt_ymd, sail_tm, psnshp_nm, oport_nm, dest_nm,
+ *   lcns_seawy_nm, nvg_seawy_nm, nvg_drc_nm, nvg_se_cd ...
  */
+
+/* "830" → "08:30", "1530" → "15:30" */
+function fmtTime(t) {
+  if (!t) return "";
+  const s = String(t).padStart(4, "0");
+  return `${s.slice(0, 2)}:${s.slice(2, 4)}`;
+}
 
 exports.handler = async (event) => {
   const API_KEY  = process.env.KOMSA_API_KEY;
@@ -22,76 +27,58 @@ exports.handler = async (event) => {
     const params = new URLSearchParams({
       serviceKey: API_KEY,
       pageNo:     "1",
-      numOfRows:  "100",   // 하루 전체 스케줄 가져오기
-      dataType:   "JSON",  // _type 아님!
-      rlvtYmd:    date,    // schDt 아님!
+      numOfRows:  "1000",  // 전국 모든 항로 포함 → 충분히 크게
+      dataType:   "JSON",
+      rlvtYmd:    date,
     });
 
-    const url = `${BASE_URL}?${params}`;
-    console.log("[ferry] 요청:", url.replace(API_KEY, "***"));
-
-    const response = await fetch(url);
+    const response = await fetch(`${BASE_URL}?${params}`);
     const text     = await response.text();
-    console.log("[ferry] 상태:", response.status);
-    console.log("[ferry] 응답 앞부분:", text.slice(0, 400));
+    console.log("[ferry] 상태:", response.status, "앞부분:", text.slice(0, 200));
 
-    if (!response.ok) {
-      return res(502, { error: `HTTP ${response.status}`, raw: text.slice(0, 300) });
-    }
+    if (!response.ok) return res(502, { error: `HTTP ${response.status}` });
 
     let data;
     try { data = JSON.parse(text); }
-    catch { return res(502, { error: "JSON 파싱 실패", raw: text.slice(0, 300) }); }
+    catch { return res(502, { error: "JSON 파싱 실패", raw: text.slice(0, 200) }); }
 
     const resultCode = data?.response?.header?.resultCode;
-    if (resultCode && resultCode !== "00") {
+    if (resultCode && resultCode !== "00" && resultCode !== "200") {
       return res(502, {
         error: `KOMSA 오류: ${data?.response?.header?.resultMsg}`,
         code: resultCode,
       });
     }
 
-    const raw   = data?.response?.body?.items?.item ?? [];
-    const all   = Array.isArray(raw) ? raw : (raw && Object.keys(raw).length ? [raw] : []);
+    const raw  = data?.response?.body?.items?.item ?? [];
+    const all  = Array.isArray(raw) ? raw : (raw && Object.keys(raw).length ? [raw] : []);
+    console.log("[ferry] 전체 항목:", all.length);
 
-    console.log("[ferry] 전체 항목 수:", all.length);
-    if (all.length > 0) {
-      console.log("[ferry] 첫 항목 키:", Object.keys(all[0]).join(", "));
-      console.log("[ferry] 첫 항목 값:", JSON.stringify(all[0]).slice(0, 300));
-    }
+    /* 출항지(oport_nm)로 필터링 — "가산" 또는 "남강" 포함 여부 */
+    const keyword = depPort === "가산→남강" ? "가산"
+                  : depPort === "남강→가산" ? "남강"
+                  : null;
 
-    /* 출항지로 필터링 — 가능한 필드명 모두 시도 */
-    const DEP_KEYWORDS = {
-      "가산→남강": ["가산"],
-      "남강→가산": ["남강"],
-    };
-    const keywords = depPort ? (DEP_KEYWORDS[depPort] ?? [depPort]) : [];
-
-    const filtered = keywords.length > 0
-      ? all.filter(item => {
-          const portVal = [
-            item.dpdtPlcNm, item.dprtPlcNm, item.hpolNm,
-            item.startPlcNm, item.depPlcNm, item.dprPlcNm,
-          ].filter(Boolean).join(" ");
-          return keywords.some(k => portVal.includes(k));
-        })
+    const items = keyword
+      ? all.filter(item => (item.oport_nm ?? "").includes(keyword))
       : all;
 
-    /* 필터 결과 없으면 전체 반환 (필드명 파악용) */
-    const items = filtered.length > 0 ? filtered : all;
-    console.log("[ferry] 필터 후:", filtered.length, "/ 전체:", all.length);
+    console.log("[ferry] 필터 후:", items.length, "/ keyword:", keyword);
+
+    /* 출발 시간 기준 정렬 */
+    items.sort((a, b) => Number(a.sail_tm ?? 0) - Number(b.sail_tm ?? 0));
 
     const schedule = items.map((item, idx) => ({
       id:      idx + 1,
-      dep:     (item.dpdtTm ?? item.dprtTm ?? item.dptTm ?? "").slice(0, 5),
-      arr:     (item.arvlTm ?? item.arrvTm ?? item.arrTm ?? "").slice(0, 5),
-      vessel:  item.psnshpNm ?? item.shipNm ?? item.vslNm ?? "정보없음",
-      seats:   Number(item.psngrCapa ?? item.pssngrCap ?? 0),
-      status:  item.ntcSttusNm ?? item.ctlSttusNm ?? "예정",
-      reason:  item.ntcRsnNm  ?? item.ctlRsnNm  ?? "",
-      routeNm: item.oprtRouteNm ?? item.rteNm ?? "",
-      depPort: item.dpdtPlcNm ?? item.dprtPlcNm ?? item.hpolNm ?? "",
-      rawKeys: idx === 0 ? Object.keys(item).join(",") : undefined,
+      dep:     fmtTime(item.sail_tm),          // 출항시각
+      arr:     fmtTime(item.arvl_tm),          // 도착시각
+      vessel:  item.psnshp_nm ?? "정보없음",    // 여객선명
+      seats:   Number(item.psngr_cap ?? item.psnshp_cap ?? 0), // 여객정원
+      status:  item.ntc_stts_nm ?? "예정",     // 통제상태명
+      reason:  item.ntc_rsn_nm  ?? "",         // 통제사유
+      depPort: item.oport_nm    ?? "",         // 출항지명
+      destPort:item.dest_nm     ?? "",         // 도착지명
+      routeNm: item.lcns_seawy_nm ?? "",       // 면허항로명
     }));
 
     return res(200, { schedule, date, depPort, total: schedule.length });
