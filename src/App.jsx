@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
-  RefreshCw, ChevronDown,
+  RefreshCw,
   Calendar, Wind, Waves,
   Sun, Cloud, CloudRain, Anchor, AlertCircle, AlertTriangle
 } from "lucide-react";
@@ -136,7 +136,6 @@ export default function App(){
 
   const [route,setRoute]       =useState("가산→남강");
   const [time,setTime]         =useState(new Date());
-  const [selDate,setSelDate]   =useState(new Date(todayBase));
   const [expanded,setExpanded] =useState(null);
 
   /* API 상태 */
@@ -184,7 +183,7 @@ export default function App(){
     }
   },[]);
 
-  useEffect(()=>{fetchSchedule(route,selDate)},[route,selDate,fetchSchedule]);
+  useEffect(()=>{fetchSchedule(route,todayBase)},[route,fetchSchedule]);
   useEffect(()=>{const t=setInterval(()=>setTime(new Date()),1000);return()=>clearInterval(t)},[]);
 
   /* 기상청 단기예보 날씨 fetch */
@@ -226,19 +225,15 @@ export default function App(){
     fetchWeather();
   },[]);
 
-  const handleRefresh=()=>fetchSchedule(route,selDate);
+  const handleRefresh=()=>fetchSchedule(route,todayBase);
   const handleRoute =r=>{setRoute(r);setExpanded(null)};
-  const handleDate  =d=>{setSelDate(d);setExpanded(null)};
 
-  const isToday  =selDate.getTime()===todayBase.getTime();
-  const isFuture =selDate>todayBase;
-
-  const allCancelled =isToday&&schedule.length>0&&schedule.every(s=>s.status==="결항");
-  const someCancelled=isToday&&!allCancelled&&schedule.some(s=>s.status==="결항");
+  const allCancelled =schedule.length>0&&schedule.every(s=>s.status==="결항");
+  const someCancelled=!allCancelled&&schedule.some(s=>s.status==="결항");
   const activeDep    =schedule.find(s=>s.status==="운항중");
-  const nextDep      =isToday&&!allCancelled?schedule.find(s=>s.status==="예정"):null;
+  const nextDep      =!allCancelled?schedule.find(s=>s.status==="예정"):null;
   const highlight    =activeDep||nextDep;
-  const allDone      =isToday&&!allCancelled&&schedule.length>0&&schedule.every(s=>s.status==="완료"||s.status==="결항");
+  const allDone      =!allCancelled&&schedule.length>0&&schedule.every(s=>s.status==="완료"||s.status==="결항");
 
   const weather = allCancelled
     ?{label:"풍랑주의보",color:C.red,  dot:C.red,  bg:"rgba(192,57,43,0.15)"}
@@ -258,7 +253,6 @@ export default function App(){
 
   const badge=allCancelled  ?{label:"전편 결항",color:C.red,   bg:C.redLight,   border:"rgba(192,57,43,0.25)"}
              :someCancelled  ?{label:"일부 결항",color:C.orange,bg:C.orangeLight,border:"rgba(208,96,32,0.25)"}
-             :isFuture       ?{label:"운항예정", color:"#7a9acc",bg:"#eef4ff",  border:"#b8ccee"}
              :allDone        ?{label:"운항종료", color:C.done,  bg:C.doneBg,    border:C.inkFaint}
              :               {label:"정상운항", color:C.deep,  bg:C.pale,      border:C.light};
 
@@ -280,11 +274,23 @@ export default function App(){
             <p style={{fontSize:11,margin:"6px 0 0",color:"rgba(255,255,255,0.58)",letterSpacing:"0.4px",fontWeight:500}}>비금도 배편 시간표</p>
           </div>
           <div style={{textAlign:"right"}}>
-            <div style={{fontSize:22,fontWeight:700,color:C.white,fontVariantNumeric:"tabular-nums",letterSpacing:"-0.5px",lineHeight:1}}>
+            {/* 시간대 뱃지 */}
+            <div style={{display:"flex",justifyContent:"flex-end",marginBottom:5}}>
+              <span style={{
+                background:"rgba(255,255,255,0.18)",borderRadius:20,padding:"3px 10px",
+                fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.9)",letterSpacing:"0.5px",
+              }}>
+                {(()=>{const h=time.getHours();return h<6?"🌙 새벽":h<12?"🌅 오전":h<18?"☀️ 오후":"🌆 저녁"})()}
+              </span>
+            </div>
+            {/* 시간 */}
+            <div style={{fontSize:26,fontWeight:900,color:C.white,fontVariantNumeric:"tabular-nums",letterSpacing:"-1px",lineHeight:1}}>
               {time.toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}
             </div>
-            <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginTop:3}}>
-              {time.toLocaleDateString("ko-KR",{month:"short",day:"numeric",weekday:"short"})}
+            {/* 날짜 — 골드 */}
+            <div style={{fontSize:13,fontWeight:700,color:"#f5c870",marginTop:5,letterSpacing:"0.2px"}}>
+              {time.getMonth()+1}월 {time.getDate()}일
+              <span style={{opacity:0.75}}> ({["일","월","화","수","목","금","토"][time.getDay()]})</span>
             </div>
           </div>
         </div>
@@ -315,7 +321,7 @@ export default function App(){
           새로고침
         </button>
       </div>
-      <div style={{background:"rgba(244,252,250,0.9)",padding:"3px 18px",borderBottom:`1px solid ${C.inkFaint}`}}>
+      <div style={{background:"rgba(244,252,250,0.9)",padding:"4px 18px",borderBottom:`1px solid ${C.inkFaint}`,textAlign:"right"}}>
         <span style={{fontSize:10,color:C.inkLight}}>
           업데이트 {lastRefresh.toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}
         </span>
@@ -345,15 +351,12 @@ export default function App(){
           ))}
         </div>
 
-        {/* 날짜 + 상태 */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontSize:20,fontWeight:900,color:C.ink}}>{dateLabel}</span>
-            <span style={{fontSize:13,fontWeight:700,color:badge.color,background:badge.bg,borderRadius:20,padding:"3px 10px",border:`1px solid ${badge.border}`}}>
-              ● {badge.label}
-            </span>
-          </div>
-          <DatePicker selectedDate={selDate} onChange={handleDate}/>
+        {/* 오늘 날짜 + 운항 상태 */}
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+          <span style={{fontSize:20,fontWeight:900,color:C.ink}}>오늘</span>
+          <span style={{fontSize:13,fontWeight:700,color:badge.color,background:badge.bg,borderRadius:20,padding:"3px 10px",border:`1px solid ${badge.border}`}}>
+            ● {badge.label}
+          </span>
         </div>
 
         {/* 로딩 */}
@@ -498,8 +501,8 @@ export default function App(){
                   return(
                     <div key={item.id}>
                       {i>0&&<div style={{height:1,background:isCancel?"#fdf0ef":C.pale,marginLeft:58}}/>}
-                      <div onClick={()=>setExpanded(isOpen?null:item.id)} style={{
-                        padding:"14px 16px",cursor:"pointer",
+                      <div style={{
+                        padding:"13px 16px",
                         display:"flex",alignItems:"center",gap:12,
                         background:isCancel?"#fdf8f8":isActive?"rgba(74,173,160,0.05)":"transparent",
                         position:"relative",
@@ -514,58 +517,52 @@ export default function App(){
                           <span style={{fontSize:11,marginTop:3,fontWeight:700,color:isDone||isCancel?C.done:isActive?C.deep:C.inkLight}}>{i+1}차</span>
                         </div>
 
-                        <div style={{flex:1}}>
+                        <div style={{flex:1,minWidth:0}}>
+                          {/* 시간 */}
                           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
                             <span style={{
-                              fontSize:27,fontWeight:900,fontVariantNumeric:"tabular-nums",letterSpacing:"-0.8px",lineHeight:1,
+                              fontSize:26,fontWeight:900,fontVariantNumeric:"tabular-nums",letterSpacing:"-0.8px",lineHeight:1,
                               color:timeColor,
                               textDecoration:isCancel?"line-through":"none",
                               textDecorationColor:"rgba(192,57,43,0.4)",
                             }}>{item.dep}</span>
                             <span style={{fontSize:14,color:C.inkFaint}}>→</span>
-                            <span style={{fontSize:18,fontWeight:700,fontVariantNumeric:"tabular-nums",color:isCancel||isDone?C.done:C.mid}}>{item.arr}</span>
+                            <span style={{fontSize:17,fontWeight:700,fontVariantNumeric:"tabular-nums",color:isCancel||isDone?C.done:C.mid}}>{item.arr}</span>
                           </div>
-                          <span style={{fontSize:13,color:isCancel||isDone?C.done:C.inkLight}}>{item.vessel}</span>
-                          {isCancel&&item.reason&&<span style={{fontSize:11,color:C.red,marginLeft:6}}>({item.reason})</span>}
+                          {/* 선명 + 항로 태그 한 줄 */}
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
+                            <span style={{fontSize:12,color:isCancel||isDone?C.done:C.inkLight,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                              {item.vessel}
+                              {isCancel&&item.reason&&<span style={{fontSize:11,color:C.red,marginLeft:4}}>({item.reason})</span>}
+                            </span>
+                            {item.routeNm&&(
+                              <span style={{
+                                fontSize:10,fontWeight:700,
+                                color:isActive?C.deep:C.inkMid,
+                                background:isActive?C.pale:"rgba(212,232,228,0.45)",
+                                borderRadius:20,padding:"2px 8px",
+                                whiteSpace:"nowrap",flexShrink:0,
+                              }}>
+                                {item.routeNm}
+                                {item.nvgDrc&&<span style={{fontWeight:400,color:C.inkLight}}> ({item.nvgDrc})</span>}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
-                        <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
+                        {/* 상태 태그 */}
+                        <div style={{flexShrink:0}}>
                           <span style={{
-                            background:tagBg,color:tagText,borderRadius:20,padding:"6px 15px",
-                            fontSize:14,fontWeight:800,whiteSpace:"nowrap",
+                            background:tagBg,color:tagText,borderRadius:20,padding:"6px 14px",
+                            fontSize:13,fontWeight:800,whiteSpace:"nowrap",
                             display:"flex",alignItems:"center",gap:5,
                             border:isCancel?`1px solid rgba(192,57,43,0.25)`:isActive?"none":isNext?`1px solid rgba(224,152,40,0.3)`:`1px solid ${C.inkFaint}`,
                           }}>
                             {isActive&&<span style={{width:5,height:5,borderRadius:"50%",background:C.white,display:"inline-block",animation:"blink 1.4s infinite"}}/>}
                             {tagLabel}
                           </span>
-                          <ChevronDown size={14} strokeWidth={2.5} color={C.inkFaint}
-                            style={{transform:isOpen?"rotate(180deg)":"none",transition:"transform 0.2s"}}/>
                         </div>
                       </div>
-
-                      {isOpen&&(
-                        <div style={{padding:"12px 16px 14px 66px",borderTop:`1px solid ${C.pale}`}}>
-                          <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,marginBottom:8}}>
-                            {[
-                              ["출발", item.dep || "--:--"],
-                              ["도착", item.arr || "--:--"],
-                            ].map(([l,v])=>(
-                              <div key={l} style={{background:C.bg,borderRadius:10,padding:"9px 12px",border:`1px solid ${C.inkFaint}`}}>
-                                <div style={{fontSize:10,color:C.inkLight,marginBottom:3}}>{l}</div>
-                                <div style={{fontSize:15,fontWeight:800,color:C.inkMid}}>{v}</div>
-                              </div>
-                            ))}
-                          </div>
-                          {/* 운항항로 (면허항로명: 남강-가산 등) */}
-                          {item.routeNm&&(
-                            <div style={{background:C.bg,borderRadius:10,padding:"9px 12px",border:`1px solid ${C.inkFaint}`}}>
-                              <div style={{fontSize:10,color:C.inkLight,marginBottom:3}}>운항항로</div>
-                              <div style={{fontSize:13,fontWeight:700,color:C.inkMid}}>{item.routeNm}</div>
-                            </div>
-                          )}
-                        </div>
-                      )}
                     </div>
                   );
                 })}

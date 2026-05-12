@@ -84,8 +84,9 @@ exports.handler = async (event) => {
         reason:   item.cntrl_rsn_nm ?? "",
         depPort:  item.oport_nm     ?? "",
         destPort: item.dest_nm      ?? "",
-        routeNm:  item.nvg_seawy_nm ?? item.lcns_seawy_nm ?? "", // 운항항로명
-        nvgSe:    item.nvg_se_nm    ?? "",  // 운항구분 (정상/증회/비운)
+        routeNm:  item.lcns_seawy_nm ?? "",   // 면허항로명 (남강-가산, 하이픈 포함)
+        nvgDrc:   item.nvg_drc_nm   ?? "",   // 운항방향 (정방향/역방향)
+        nvgSe:    item.nvg_se_nm    ?? "",   // 운항구분 (정상/증회/비운)
       };
     });
 
