@@ -54,10 +54,8 @@ exports.handler = async (event) => {
     const all  = Array.isArray(raw) ? raw : (raw && Object.keys(raw).length ? [raw] : []);
     console.log("[ferry] 전체 항목:", all.length);
 
-    /* 출항지(oport_nm)로 필터링 — "가산" 또는 "남강" 포함 여부 */
-    const keyword = depPort === "가산→남강" ? "가산"
-                  : depPort === "남강→가산" ? "남강"
-                  : null;
+    /* 출항지(oport_nm)로 필터링 — depPort는 이미 "가산" 또는 "남강" */
+    const keyword = depPort || null;
 
     const items = keyword
       ? all.filter(item => (item.oport_nm ?? "").includes(keyword))
