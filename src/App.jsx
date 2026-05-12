@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   RefreshCw, ChevronDown,
-  Calendar, Home, Clock, Bell, User, Wind, Waves,
+  Calendar, Wind, Waves,
   Sun, Cloud, CloudRain, Anchor, AlertCircle, AlertTriangle
 } from "lucide-react";
 
@@ -104,7 +104,7 @@ function DatePicker({selectedDate,onChange}){
         날짜 선택
         <ChevronDown size={13} strokeWidth={2.5} color={C.inkLight}/>
       </button>
-      {/* 숨겨진 네이티브 date input */}
+      {/* 숨겨진 네이티브 date input — opacity:0.01 (iOS에서 opacity:0은 터치 무시됨) */}
       <input
         ref={inputRef}
         type="date"
@@ -113,8 +113,9 @@ function DatePicker({selectedDate,onChange}){
         style={{
           position:"absolute",top:0,left:0,
           width:"100%",height:"100%",
-          opacity:0,cursor:"pointer",
+          opacity:0.01,cursor:"pointer",
           zIndex:2,
+          WebkitAppearance:"none",
         }}
       />
     </div>
@@ -131,7 +132,6 @@ export default function App(){
   const [time,setTime]         =useState(new Date());
   const [selDate,setSelDate]   =useState(new Date(todayBase));
   const [expanded,setExpanded] =useState(null);
-  const [tab,setTab]           =useState("홈");
 
   /* API 상태 */
   const [schedule,setSchedule] =useState([]);
@@ -245,7 +245,7 @@ export default function App(){
              :               {label:"정상운항", color:C.deep,  bg:C.pale,      border:C.light};
 
   return(
-    <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Noto Sans KR','Apple SD Gothic Neo',sans-serif",color:C.ink,paddingBottom:76,maxWidth:480,margin:"0 auto"}}>
+    <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Noto Sans KR','Apple SD Gothic Neo',sans-serif",color:C.ink,paddingBottom:24,maxWidth:480,margin:"0 auto"}}>
 
       {/* ── 헤더 ── */}
       <div style={{background:`linear-gradient(135deg,#3a9e96 0%,${C.mid} 100%)`,padding:"22px 22px 20px"}}>
@@ -613,26 +613,6 @@ export default function App(){
             <div style={{marginTop:4,color:C.inkFaint}}>실제 운항 여부는 당일 반드시 재확인하세요</div>
           </div>
         </div>
-      </div>
-
-      {/* ── 하단 탭바 ── */}
-      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,zIndex:10,background:"rgba(255,255,255,0.97)",backdropFilter:"blur(12px)",borderTop:`1px solid ${C.inkFaint}`,display:"flex",justifyContent:"space-around",padding:"8px 0 14px"}}>
-        {[
-          {id:"홈",   icon:<Home  size={22} strokeWidth={1.8}/>,label:"홈"   },
-          {id:"시간표",icon:<Clock size={22} strokeWidth={1.8}/>,label:"시간표"},
-          {id:"알림", icon:<Bell  size={22} strokeWidth={1.8}/>,label:"알림" },
-          {id:"내정보",icon:<User  size={22} strokeWidth={1.8}/>,label:"내정보"},
-        ].map(t=>(
-          <button key={t.id} onClick={()=>setTab(t.id)} style={{
-            display:"flex",flexDirection:"column",alignItems:"center",gap:3,
-            background:"none",border:"none",cursor:"pointer",padding:"2px 14px",
-            color:tab===t.id?C.deep:C.inkLight,
-          }}>
-            {t.icon}
-            <span style={{fontSize:11,fontWeight:tab===t.id?700:500}}>{t.label}</span>
-            {tab===t.id&&<div style={{width:18,height:3,borderRadius:2,background:C.deep,marginTop:1}}/>}
-          </button>
-        ))}
       </div>
 
       <style>{`
