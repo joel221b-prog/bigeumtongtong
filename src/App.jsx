@@ -213,10 +213,10 @@ export default function App(){
             <div style={{fontSize:26,fontWeight:900,color:C.white,fontVariantNumeric:"tabular-nums",letterSpacing:"-1px",lineHeight:1}}>
               {time.toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}
             </div>
-            {/* 날짜 — 골드 */}
-            <div style={{fontSize:13,fontWeight:700,color:"#f5c870",marginTop:5,letterSpacing:"0.2px"}}>
+            {/* 날짜 — 골드, 선명하게 */}
+            <div style={{fontSize:13,fontWeight:800,color:"#f0b429",marginTop:5,letterSpacing:"0.3px",WebkitFontSmoothing:"antialiased"}}>
               {time.getMonth()+1}월 {time.getDate()}일
-              <span style={{opacity:0.75}}> ({["일","월","화","수","목","금","토"][time.getDay()]})</span>
+              <span style={{fontWeight:600,opacity:0.85}}> ({["일","월","화","수","목","금","토"][time.getDay()]})</span>
             </div>
           </div>
         </div>
@@ -454,25 +454,11 @@ export default function App(){
                             <span style={{fontSize:14,color:C.inkFaint}}>→</span>
                             <span style={{fontSize:17,fontWeight:700,fontVariantNumeric:"tabular-nums",color:isCancel||isDone?C.done:C.mid}}>{item.arr}</span>
                           </div>
-                          {/* 선명 + 항로 태그 한 줄 */}
-                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
-                            <span style={{fontSize:12,color:isCancel||isDone?C.done:C.inkLight,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                              {item.vessel}
-                              {isCancel&&item.reason&&<span style={{fontSize:11,color:C.red,marginLeft:4}}>({item.reason})</span>}
-                            </span>
-                            {item.routeNm&&(
-                              <span style={{
-                                fontSize:10,fontWeight:700,
-                                color:isActive?C.deep:C.inkMid,
-                                background:isActive?C.pale:"rgba(212,232,228,0.45)",
-                                borderRadius:20,padding:"2px 8px",
-                                whiteSpace:"nowrap",flexShrink:0,
-                              }}>
-                                {item.routeNm}
-                                {item.nvgDrc&&<span style={{fontWeight:400,color:C.inkLight}}> ({item.nvgDrc})</span>}
-                              </span>
-                            )}
-                          </div>
+                          {/* 선명 */}
+                          <span style={{fontSize:12,color:isCancel||isDone?C.done:C.inkLight,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>
+                            {item.vessel}
+                            {isCancel&&item.reason&&<span style={{fontSize:11,color:C.red,marginLeft:4}}>({item.reason})</span>}
+                          </span>
                         </div>
 
                         {/* 상태 태그 */}
