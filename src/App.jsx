@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   RefreshCw,
-  Calendar, Wind, Waves,
-  Sun, Cloud, CloudRain, Anchor, AlertCircle, AlertTriangle
+  Wind, Waves,
+  Sun, Cloud, CloudRain, Anchor, AlertTriangle
 } from "lucide-react";
 
 /* ── 팔레트 ── */
@@ -34,18 +34,15 @@ const toDateStr = d => {
   return `${y}${m}${day}`;
 };
 
-function resolveStatus(apiStatus, dep, selDate) {
-  if (["결항","통제"].includes(apiStatus)) return "결항";
+function resolveStatus(apiStatus, dep) {
+  if (apiStatus === "결항") return "결항";
 
-  const today = new Date(); today.setHours(0,0,0,0);
-  const sel   = new Date(selDate); sel.setHours(0,0,0,0);
-  if (sel > today) return "예정";
-  if (sel < today) return "완료";
-
+  if (!dep) return apiStatus;
   const [h,m] = dep.split(":").map(Number);
-  const dMin  = h*60+m;
-  const now   = new Date();
-  const nMin  = now.getHours()*60+now.getMinutes();
+  if (isNaN(h)||isNaN(m)) return apiStatus;
+  const dMin = h*60+m;
+  const now  = new Date();
+  const nMin = now.getHours()*60+now.getMinutes();
   if (nMin>=dMin && nMin<dMin+80) return "운항중";
   if (nMin>=dMin+80) return "완료";
   return "예정";
@@ -58,76 +55,6 @@ function WIcon({t,size=15}){
   return <Cloud size={size} strokeWidth={1.8} color={C.inkLight}/>;
 }
 
-/* ── DatePicker: Chrome/iOS/Samsung 모두 지원 ── */
-function DatePicker({selectedDate,onChange}){
-  const inputRef = useRef(null);
-
-  const toValue = d => {
-    if(!(d instanceof Date)) return "";
-    return [d.getFullYear(), String(d.getMonth()+1).padStart(2,"0"),
-            String(d.getDate()).padStart(2,"0")].join("-");
-  };
-
-  const handleChange = e => {
-    if(!e.target.value) return;
-    const [y,m,d] = e.target.value.split("-").map(Number);
-    const date = new Date(y, m-1, d);
-    date.setHours(0,0,0,0);
-    onChange(date);
-  };
-
-  /* 클릭 시 showPicker() 호출 (Chrome) — input 직접 탭(iOS)도 동작 */
-  const handleClick = e => {
-    e.preventDefault();
-    if(!inputRef.current) return;
-    try { inputRef.current.showPicker(); }
-    catch { inputRef.current.click(); }
-  };
-
-  return(
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={handleClick}
-      onKeyDown={e=>{ if(e.key==="Enter"||e.key===" ") handleClick(e); }}
-      style={{position:"relative",display:"inline-block",cursor:"pointer"}}
-    >
-      {/* 시각 레이어 */}
-      <div style={{
-        display:"flex",alignItems:"center",gap:6,
-        background:C.white,border:`1.5px solid ${C.inkFaint}`,
-        borderRadius:10,padding:"8px 14px",
-        color:C.inkMid,fontSize:14,fontWeight:600,
-        boxShadow:"0 1px 4px rgba(0,0,0,0.05)",
-        pointerEvents:"none",userSelect:"none",whiteSpace:"nowrap",
-      }}>
-        <Calendar size={14} strokeWidth={2} color={C.deep}/>
-        날짜 선택
-        <ChevronDown size={13} strokeWidth={2.5} color={C.inkLight}/>
-      </div>
-      {/* input: opacity 0.01로 탭 가능, iOS Safari 호환 */}
-      <input
-        ref={inputRef}
-        type="date"
-        value={toValue(selectedDate)}
-        onChange={handleChange}
-        onClick={e=>e.stopPropagation()} /* 버블링 방지 */
-        style={{
-          position:"absolute",
-          top:0,left:0,
-          width:"100%",height:"100%",
-          opacity:0.01,     /* 0이면 iOS 터치 무시 */
-          cursor:"pointer",
-          fontSize:16,      /* iOS 자동 확대 방지 */
-          border:"none",
-          background:"transparent",
-          zIndex:1,
-        }}
-      />
-    </div>
-  );
-}
-
 /* ── 메인 ── */
 export default function App(){
   const todayBaseRef=useRef(null);
@@ -136,7 +63,6 @@ export default function App(){
 
   const [route,setRoute]       =useState("가산→남강");
   const [time,setTime]         =useState(new Date());
-  const [expanded,setExpanded] =useState(null);
 
   /* API 상태 */
   const [schedule,setSchedule] =useState([]);
@@ -171,7 +97,7 @@ export default function App(){
       /* 상태 보정 */
       const withStatus = (data.schedule||[]).map(item=>({
         ...item,
-        status: resolveStatus(item.status, item.dep, date),
+        status: resolveStatus(item.status, item.dep),
       }));
       setSchedule(withStatus);
       setLastRefresh(new Date());
@@ -249,7 +175,7 @@ export default function App(){
     ? `파고 ${realWeather.waveH}m`
     : "파고 -";
 
-  const dateLabel=isToday?"오늘":selDate.toLocaleDateString("ko-KR",{month:"long",day:"numeric",weekday:"short"});
+
 
   const badge=allCancelled  ?{label:"전편 결항",color:C.red,   bg:C.redLight,   border:"rgba(192,57,43,0.25)"}
              :someCancelled  ?{label:"일부 결항",color:C.orange,bg:C.orangeLight,border:"rgba(208,96,32,0.25)"}
@@ -271,7 +197,7 @@ export default function App(){
               <path d="M0,5 Q14,0 28,5 Q42,10 56,5 Q70,0 84,5 Q98,10 112,5" stroke="rgba(255,255,255,0.55)" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
               <path d="M0,10 Q14,6 28,10 Q42,14 56,10 Q70,6 84,10 Q98,14 112,10" stroke="rgba(245,200,122,0.9)" strokeWidth="1.8" strokeLinecap="round" fill="none"/>
             </svg>
-            <p style={{fontSize:11,margin:"6px 0 0",color:"rgba(255,255,255,0.58)",letterSpacing:"0.4px",fontWeight:500}}>비금도 배편 시간표</p>
+            <p style={{fontSize:11,margin:"5px 0 0",color:"rgba(255,255,255,0.58)",letterSpacing:"0.4px",fontWeight:500,paddingLeft:1}}>비금도 배편 시간표</p>
           </div>
           <div style={{textAlign:"right"}}>
             {/* 시간대 뱃지 */}
@@ -490,7 +416,6 @@ export default function App(){
                   const isActive=item.status==="운항중";
                   const isNext  =item.status==="예정";
                   const isCancel=item.status==="결항";
-                  const isOpen  =expanded===item.id;
 
                   const dotColor=isCancel?C.red:isActive?C.deep:isNext?C.goldAccent:C.done;
                   const timeColor=isCancel?C.done:isActive?C.deep:isNext?C.inkLight:C.done;
@@ -606,27 +531,42 @@ export default function App(){
           </div>
         </div>
 
-        {/* ── 이용 안내 ── */}
-        {!allCancelled&&!someCancelled&&(
-          <div style={{background:C.orangeLight,border:`1.5px solid rgba(224,152,40,0.4)`,borderRadius:14,padding:"14px 16px",marginBottom:16}}>
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,color:C.goldDark}}>
-              <AlertCircle size={15} strokeWidth={2}/>
-              <span style={{fontSize:14,fontWeight:800}}>이용 안내</span>
+        {/* ── 이용 안내 (C-β) ── */}
+        <div style={{background:C.white,borderRadius:16,overflow:"hidden",border:`1px solid ${C.inkFaint}`,marginBottom:16}}>
+          <div style={{background:`linear-gradient(135deg,rgba(74,173,160,0.1),rgba(126,205,192,0.15))`,padding:"11px 16px",borderBottom:`1px solid ${C.inkFaint}`}}>
+            <span style={{fontSize:12,fontWeight:800,color:C.deep}}>⚓ 이용 안내</span>
+          </div>
+          {[
+            {icon:"⛈", text:"기상에 따라 운항이 변경될 수 있습니다"},
+            {icon:"⏰", text:"출발 30분 전 터미널 도착 필수"},
+            {icon:"📋", text:"당일 운항 여부를 꼭 재확인하세요"},
+          ].map((t,i)=>(
+            <div key={i} style={{
+              padding:"11px 16px",
+              display:"flex",alignItems:"center",gap:12,
+              borderBottom:i<2?`1px solid ${C.pale}`:"none",
+            }}>
+              <span style={{
+                width:22,height:22,borderRadius:"50%",
+                background:C.pale,
+                display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:11,flexShrink:0,
+              }}>{t.icon}</span>
+              <span style={{fontSize:13,color:C.inkMid,lineHeight:1.5}}>{t.text}</span>
             </div>
-            {["기상에 따라 운항이 변경될 수 있습니다","출발 30분 전 터미널 도착 필수","당일 운항 여부를 꼭 재확인하세요"].map((t,i)=>(
-              <div key={i} style={{fontSize:14,color:"#7a5030",marginBottom:6,display:"flex",gap:8,lineHeight:1.5,alignItems:"flex-start"}}>
-                <span style={{color:C.goldAccent,flexShrink:0}}>—</span>{t}
-              </div>
-            ))}
-            <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid rgba(224,152,40,0.3)`,display:"flex",alignItems:"center",gap:10}}>
-              <span style={{fontSize:16}}>📞</span>
-              <div>
-                <div style={{fontSize:11,color:C.goldDark}}>남강항 문의</div>
-                <div style={{fontSize:20,fontWeight:900,color:C.ink}}>061-275-9915</div>
-              </div>
+          ))}
+          {/* 전화 — SVG 아이콘 C-β 미드 틸 */}
+          <div style={{padding:"13px 16px",display:"flex",alignItems:"center",gap:14,borderTop:`1px solid ${C.inkFaint}`}}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+              stroke={C.mid} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.56A2 2 0 0 1 3.59 1.36h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.37a16 16 0 0 0 6.72 6.72l.88-.88a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+            </svg>
+            <div>
+              <div style={{fontSize:10,color:C.inkLight,marginBottom:1}}>남강항 문의</div>
+              <div style={{fontSize:19,fontWeight:900,color:C.ink,letterSpacing:"-0.5px"}}>061-275-9915</div>
             </div>
           </div>
-        )}
+        </div>
 
         {/* ── 출처 + 법적 고지 ── */}
         {/* 푸터 파도 배경 */}

@@ -71,9 +71,12 @@ exports.handler = async (event) => {
 
     const schedule = items.map((item, idx) => {
       const stts   = item.nvg_stts_nm ?? "";
-      const status = stts.includes("운항중") ? "운항중"
+      const nvgSe  = item.nvg_se_nm   ?? "";
+      /* 비운(비운항) 또는 통제사유 있으면 결항 처리 */
+      const status = (item.cntrl_rsn_nm || nvgSe === "비운"
+                     || stts.includes("통제") || stts.includes("결항")) ? "결항"
+                   : stts.includes("운항중") ? "운항중"
                    : stts.includes("완료")   ? "완료"
-                   : (item.cntrl_rsn_nm || stts.includes("통제") || stts.includes("결항")) ? "결항"
                    : "예정";
       return {
         id:       idx + 1,
