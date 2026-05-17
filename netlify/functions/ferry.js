@@ -31,13 +31,13 @@ const ROUTE_CONFIG = {
     lcns: ["남강","가산"], drc: "정방향", oport: "남강",     arrMin: 40,
   },
   "목포_to_가산": {
-    lcns: ["목포"],        drc: "정방향", oport: "목포",     arrMin: 135,
+    lcns: ["도초","목포"], drc: "정방향", oport: "목포",     arrMin: 135,
   },
   "가산_to_남강": {
     lcns: ["남강","가산"], drc: "역방향", oport: "가산",     arrMin: 40,
   },
   "가산_to_목포": {
-    lcns: ["목포"],        drc: "역방향", oport: "비금",     arrMin: 110,
+    lcns: ["도초","목포"], drc: "역방향", oport: "비금",     arrMin: 110,
   },
 };
 
@@ -111,6 +111,7 @@ exports.handler = async (event) => {
         id:       idx + 1,
         dep:      fmtTime(item.sail_tm),
         arr:      addMinutes(item.sail_tm, cfg.arrMin),
+        arrMin:   cfg.arrMin,
         vessel:   item.psnshp_nm    ?? "정보없음",
         status,
         reason:   item.cntrl_rsn_nm ?? "",

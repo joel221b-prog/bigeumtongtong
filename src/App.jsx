@@ -48,7 +48,7 @@ const toDateStr = d => {
   return `${y}${m}${day}`;
 };
 
-function resolveStatus(apiStatus, dep) {
+function resolveStatus(apiStatus, dep, arrMin = 80) {
   if (apiStatus === "결항") return "결항";
 
   if (!dep) return apiStatus;
@@ -57,8 +57,8 @@ function resolveStatus(apiStatus, dep) {
   const dMin = h*60+m;
   const now  = new Date();
   const nMin = now.getHours()*60+now.getMinutes();
-  if (nMin>=dMin && nMin<dMin+80) return "운항중";
-  if (nMin>=dMin+80) return "완료";
+  if (nMin>=dMin && nMin<dMin+arrMin) return "운항중";
+  if (nMin>=dMin+arrMin) return "완료";
   return "예정";
 }
 
@@ -118,7 +118,7 @@ export default function App(){
       /* 상태 보정 */
       const withStatus = (data.schedule||[]).map(item=>({
         ...item,
-        status: resolveStatus(item.status, item.dep),
+        status: resolveStatus(item.status, item.dep, item.arrMin ?? 80),
       }));
       setSchedule(withStatus);
       setLastRefresh(new Date());
@@ -220,8 +220,10 @@ export default function App(){
              :               {label:"정상운항", color:C.deep,  bg:C.pale,      border:C.light};
 
   return(
-    <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Noto Sans KR','Apple SD Gothic Neo',sans-serif",color:C.ink,paddingBottom:24,maxWidth:480,margin:"0 auto"}}>
+    <div style={{height:"100dvh",display:"flex",flexDirection:"column",background:C.bg,fontFamily:"'Noto Sans KR','Apple SD Gothic Neo',sans-serif",color:C.ink,maxWidth:480,margin:"0 auto",overflow:"hidden"}}>
 
+      {/* ── 고정 헤더 영역 ── */}
+      <div style={{flexShrink:0}}>
       {/* ── 헤더 ── */}
       <div style={{background:`linear-gradient(135deg,#3a9e96 0%,${C.mid} 100%)`,padding:"22px 22px 20px"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
@@ -325,8 +327,10 @@ export default function App(){
         </span>
       </div>
 
-      {/* ── 본문 ── */}
-      <div style={{padding:"14px 16px 0"}}>
+      </div>{/* ── 고정 헤더 영역 닫기 ── */}
+
+      {/* ── 스크롤 본문 ── */}
+      <div style={{flex:1,overflowY:"auto",padding:"14px 16px 0",paddingBottom:24}}>
 
         {/* ── 공지 배너 ── */}
         {!noticeDismissed&&(
@@ -509,7 +513,7 @@ export default function App(){
                   {highlight.vessel}{highlight.arr ? ` · ${highlight.arr} 도착` : ""}
                 </div>
               </div>
-              <svg width="90" height="80" viewBox="0 0 100 90" fill="none">
+              <svg width="90" height="81" viewBox="0 0 100 90" fill="none" style={{flexShrink:0}}>
                 <circle cx="52" cy="10" r="6" fill="rgba(255,255,255,0.50)"/>
                 <circle cx="58" cy="5" r="4.5" fill="rgba(255,255,255,0.35)"/>
                 <circle cx="63" cy="1" r="3" fill="rgba(255,255,255,0.22)"/>
@@ -777,7 +781,7 @@ export default function App(){
           </div>
         </div>
 
-      </div>{/* ── 본문 wrapper 닫기 ── */}
+      </div>{/* ── 스크롤 본문 닫기 ── */}
 
       {/* ── 공지 모달 ── */}
       {noticeOpen&&(
