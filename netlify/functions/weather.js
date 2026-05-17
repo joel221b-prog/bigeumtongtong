@@ -72,7 +72,7 @@ exports.handler = async () => {
 
     const response = await fetch(url);
     const text     = await response.text();
-    console.log("[weather] HTTP 상태:", response.status, "/ 앞부분:", text.slice(0, 200));
+    
 
     let data;
     try { data = JSON.parse(text); }

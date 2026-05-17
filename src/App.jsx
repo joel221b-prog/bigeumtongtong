@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import {
   RefreshCw,
   Wind, Waves,
-  Sun, Cloud, CloudRain, Anchor, AlertTriangle
+  Sun, Cloud, CloudRain, Anchor, AlertTriangle, AlertCircle
 } from "lucide-react";
 
 /* ── 팔레트 ── */
@@ -16,12 +16,26 @@ const C = {
   orange:"#d06020", orangeLight:"#fff4ec",
 };
 
-/* ── 날씨코드 → 아이콘 매핑 (Open-Meteo WMO) ── */
-const toIcon = code => {
-  if (code === 0) return "sun";
-  if (code <= 3)  return "cloud";
-  if (code <= 48) return "cloud";
-  return "rain"; // 51+ 비/눈/뇌우
+/* ── 공지 설정 ── */
+const NOTICE = {
+  id:    "launch-2026-05",
+  badge: "🐚",
+  short: "앱 스토어 등록 준비 중입니다",
+  detail: [
+    "비금통통 개발이 완료되어 현재 앱 스토어 등록을 준비 중입니다.",
+    "정식 배포 후에는 App Store 및 Google Play를 통해 최신 버전을 이용하실 수 있습니다.",
+    "",
+    "현재 표시되는 운항 정보는 실제와 다를 수 있으니 반드시 선사에 확인 후 이용해 주세요.",
+    "오류나 개선 의견은 하단 선사 연락처로 알려주세요.",
+  ].join("\n"),
+};
+
+/* ── 노선 레이블 ── */
+const ROUTE_LABELS = {
+  "남강_to_가산":"남강 → 가산",
+  "가산_to_남강":"가산 → 남강",
+  "목포_to_가산":"목포 → 가산",
+  "가산_to_목포":"가산 → 목포",
 };
 
 const DAY_LABELS = ["일","월","화","수","목","금","토"];
@@ -60,8 +74,14 @@ export default function App(){
   const todayBaseRef=useRef(null);
   if(!todayBaseRef.current){const d=new Date();d.setHours(0,0,0,0);todayBaseRef.current=d;}
   const todayBase=todayBaseRef.current;
+  const activeItemRef=useRef(null); /* 운항중/첫 예정 항차 자동 스크롤 */
 
-  const [route,setRoute]       =useState("가산→남강");
+  /* 공지 */
+  const [noticeOpen,setNoticeOpen]           =useState(false);
+  const [noticeDismissed,setNoticeDismissed] =useState(false);
+
+  /* 출발지 / 노선 */
+  const [routeKey,setRouteKey] =useState("가산_to_남강");
   const [time,setTime]         =useState(new Date());
 
   /* API 상태 */
@@ -76,20 +96,21 @@ export default function App(){
   const [realWeather,setRealWeather]=useState(null); // 기상청 현재 기상
 
   /* 법적 고지 모달 */
-  const [legalModal,setLegalModal]=useState(null); // null | "privacy" | "terms"
-  const DEP_PORT = {
-    "가산→남강":"가산",
-    "남강→가산":"남강",
-  };
+  const [legalModal,setLegalModal]=useState(null);
+
+  /* 목포 경유 토글 */
+  const [mopo,setMopo]=useState(false);
+  const mainRoutes = mopo
+    ? ["목포_to_가산","가산_to_목포"]
+    : ["남강_to_가산","가산_to_남강"];
 
   /* API 호출 */
-  const fetchSchedule = useCallback(async(rt, date)=>{
+  const fetchSchedule = useCallback(async(rk, date)=>{
     setLoading(true);
     setError(null);
     try{
-      const depPort  = DEP_PORT[rt];
       const dateStr  = toDateStr(date);
-      const res      = await fetch(`/api/ferry?depPort=${encodeURIComponent(depPort)}&date=${dateStr}`);
+      const res      = await fetch(`/api/ferry?depPort=${encodeURIComponent(rk)}&date=${dateStr}`);
       if(!res.ok) throw new Error(`HTTP ${res.status}`);
       const data     = await res.json();
       if(data.error) throw new Error(data.error);
@@ -109,8 +130,19 @@ export default function App(){
     }
   },[]);
 
-  useEffect(()=>{fetchSchedule(route,todayBase)},[route,fetchSchedule]);
+  useEffect(()=>{fetchSchedule(routeKey,todayBase)},[routeKey,fetchSchedule]);
   useEffect(()=>{const t=setInterval(()=>setTime(new Date()),1000);return()=>clearInterval(t)},[]);
+
+  /* 스케줄 로드 후 운항중/첫 예정 항차로 자동 스크롤 */
+  useEffect(()=>{
+    if(loading||schedule.length===0) return;
+    const timer=setTimeout(()=>{
+      if(activeItemRef.current){
+        activeItemRef.current.scrollIntoView({behavior:"smooth",block:"center"});
+      }
+    },400);
+    return()=>clearTimeout(timer);
+  },[schedule,loading]);
 
   /* 기상청 단기예보 날씨 fetch */
   useEffect(()=>{
@@ -151,8 +183,13 @@ export default function App(){
     fetchWeather();
   },[]);
 
-  const handleRefresh=()=>fetchSchedule(route,todayBase);
-  const handleRoute =r=>{setRoute(r);setExpanded(null)};
+  const handleRefresh =()=>fetchSchedule(routeKey,todayBase);
+  const handleMopo    =v=>{
+    setMopo(v);
+    setRouteKey(v
+      ? (routeKey==="남강_to_가산"||routeKey==="가산_to_남강" ? "가산_to_목포" : routeKey)
+      : (routeKey==="목포_to_가산"||routeKey==="가산_to_목포" ? "가산_to_남강" : routeKey));
+  };
 
   const allCancelled =schedule.length>0&&schedule.every(s=>s.status==="결항");
   const someCancelled=!allCancelled&&schedule.some(s=>s.status==="결항");
@@ -200,23 +237,58 @@ export default function App(){
             <p style={{fontSize:11,margin:"5px 0 0",color:"rgba(255,255,255,0.58)",letterSpacing:"0.4px",fontWeight:500,paddingLeft:1}}>비금도 배편 시간표</p>
           </div>
           <div style={{textAlign:"right"}}>
-            {/* 시간대 뱃지 */}
-            <div style={{display:"flex",justifyContent:"flex-end",marginBottom:5}}>
-              <span style={{
-                background:"rgba(255,255,255,0.18)",borderRadius:20,padding:"3px 10px",
-                fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.9)",letterSpacing:"0.5px",
+            {/* 시간대 뱃지 — 다크 + SVG 아이콘 */}
+            <div style={{display:"flex",justifyContent:"flex-end",marginBottom:6}}>
+              <div style={{
+                background:"rgba(0,0,0,0.3)",
+                border:"1px solid rgba(255,255,255,0.2)",
+                borderRadius:20,padding:"4px 11px",
+                display:"flex",alignItems:"center",gap:5,
               }}>
-                {(()=>{const h=time.getHours();return h<6?"🌙 새벽":h<12?"🌅 오전":h<18?"☀️ 오후":"🌆 저녁"})()}
-              </span>
+                {/* 시간대별 SVG 아이콘 */}
+                {(()=>{
+                  const h=time.getHours();
+                  const period=h<6?"새벽":h<12?"오전":h<18?"오후":"저녁";
+                  const ic="rgba(255,255,255,0.88)";
+                  const icon=h<6?(
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill={ic} stroke="none">
+                      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    </svg>
+                  ):h<18?(
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={ic} strokeWidth="2.2" strokeLinecap="round">
+                      <circle cx="12" cy="12" r={h<12?"4":"5"} fill={ic} stroke="none"/>
+                      <line x1="12" y1="2" x2="12" y2="5"/>
+                      <line x1="12" y1="19" x2="12" y2="22"/>
+                      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                      <line x1="2" y1="12" x2="5" y2="12"/>
+                      <line x1="19" y1="12" x2="22" y2="12"/>
+                      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    </svg>
+                  ):(
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={ic} strokeWidth="2" strokeLinecap="round">
+                      <path d="M17 18a5 5 0 0 0-10 0"/>
+                      <line x1="12" y1="2" x2="12" y2="9"/>
+                      <line x1="4.22" y1="10.22" x2="5.64" y2="11.64"/>
+                      <line x1="1" y1="18" x2="3" y2="18"/>
+                      <line x1="21" y1="18" x2="23" y2="18"/>
+                      <line x1="18.36" y1="11.64" x2="19.78" y2="10.22"/>
+                    </svg>
+                  );
+                  return <>{icon}<span style={{fontSize:11,fontWeight:700,color:ic,letterSpacing:"0.3px"}}>{period}</span></>;
+                })()}
+              </div>
             </div>
             {/* 시간 */}
-            <div style={{fontSize:26,fontWeight:900,color:C.white,fontVariantNumeric:"tabular-nums",letterSpacing:"-1px",lineHeight:1}}>
-              {time.toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}
+            <div style={{fontSize:28,fontWeight:900,color:C.white,fontVariantNumeric:"tabular-nums",letterSpacing:"-1px",lineHeight:1}}>
+              {String(time.getHours()%12||12).padStart(2,"0")}:{String(time.getMinutes()).padStart(2,"0")}<span style={{fontSize:19,opacity:0.55}}>:{String(time.getSeconds()).padStart(2,"0")}</span>
             </div>
-            {/* 날짜 — 골드, 선명하게 */}
-            <div style={{fontSize:13,fontWeight:800,color:"#f0b429",marginTop:5,letterSpacing:"0.3px",WebkitFontSmoothing:"antialiased"}}>
+            {/* 골드 날짜 + 글로우 */}
+            <div style={{fontSize:15,fontWeight:800,color:"#FFD166",marginTop:5,letterSpacing:"0.5px",
+              textShadow:"0 1px 8px rgba(0,0,0,0.3)",WebkitFontSmoothing:"antialiased"}}>
               {time.getMonth()+1}월 {time.getDate()}일
-              <span style={{fontWeight:600,opacity:0.85}}> ({["일","월","화","수","목","금","토"][time.getDay()]})</span>
+              <span style={{fontWeight:700,opacity:0.85}}> ({["일","월","화","수","목","금","토"][time.getDay()]})</span>
             </div>
           </div>
         </div>
@@ -256,25 +328,112 @@ export default function App(){
       {/* ── 본문 ── */}
       <div style={{padding:"14px 16px 0"}}>
 
-        {/* 항로 선택 */}
-        <div style={{background:C.white,borderRadius:14,padding:5,display:"grid",gridTemplateColumns:"1fr 1fr",gap:4,marginBottom:14,boxShadow:"0 1px 6px rgba(74,173,160,0.1)",border:`1px solid ${C.inkFaint}`}}>
-          {["가산→남강","남강→가산"].map(r=>(
-            <button key={r} onClick={()=>handleRoute(r)} style={{
-              padding:"14px 8px",borderRadius:10,border:"none",cursor:"pointer",
-              fontWeight:800,fontSize:15,transition:"all 0.2s",
-              display:"flex",alignItems:"center",justifyContent:"center",gap:6,
-              background:route===r?"linear-gradient(135deg,#b87820,#e09828)":"transparent",
-              color:route===r?C.white:C.inkLight,
-              boxShadow:route===r?"0 3px 12px rgba(224,152,40,0.35)":"none",
-            }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="20"/>
-                <path d="M5,14 C5,18 19,18 19,14"/>
-                <line x1="5" y1="20" x2="12" y2="20"/><line x1="19" y1="20" x2="12" y2="20"/>
+        {/* ── 공지 배너 ── */}
+        {!noticeDismissed&&(
+          <div style={{display:"flex",alignItems:"center",gap:10,
+            background:"rgba(26,50,48,0.92)",borderRadius:14,padding:"10px 14px",marginBottom:12}}>
+            <span style={{fontSize:16,flexShrink:0}}>🐚</span>
+            <span style={{fontSize:12,fontWeight:700,color:"rgba(255,255,255,0.9)",flex:1,lineHeight:1.4}}>
+              {NOTICE.short}
+            </span>
+            <button onClick={()=>setNoticeOpen(true)} style={{
+              background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.25)",
+              borderRadius:20,padding:"4px 10px",fontSize:11,fontWeight:700,
+              color:"rgba(255,255,255,0.85)",cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,
+            }}>더보기</button>
+            <button onClick={()=>setNoticeDismissed(true)} style={{
+              background:"none",border:"none",color:"rgba(255,255,255,0.4)",
+              cursor:"pointer",fontSize:16,lineHeight:1,flexShrink:0,padding:0,
+            }}>✕</button>
+          </div>
+        )}
+
+        {/* ── T3 항로 선택 메뉴 ── */}
+        <div style={{marginBottom:12}}>
+          {/* 타이틀 + 목포 경유 토글 */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+            <div style={{display:"flex",alignItems:"center",gap:7}}>
+              {/* 나침반 아이콘 */}
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.deep} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <polygon points="16.24,7.76 14.12,14.12 7.76,16.24 9.88,9.88" fill={C.deep} opacity="0.7" stroke="none"/>
               </svg>
-              {r==="가산→남강"?"가산 → 남강":"남강 → 가산"}
+              <span style={{fontSize:15,fontWeight:900,color:C.ink}}>항로 선택</span>
+              <span style={{fontSize:10,fontWeight:700,
+                color:mopo?"#fff":C.goldDark,
+                background:mopo?C.deep:C.goldLight,
+                borderRadius:20,padding:"3px 9px",
+                border:`1px solid ${mopo?C.deep:"rgba(224,152,40,0.3)"}`,
+                transition:"all 0.25s",
+              }}>
+                {mopo?"경유 선택중":"직항 선택중"}
+              </span>
+            </div>
+            <button onClick={()=>handleMopo(!mopo)} style={{
+              display:"flex",alignItems:"center",gap:5,padding:"6px 13px",
+              borderRadius:20,cursor:"pointer",fontSize:11,fontWeight:800,
+              transition:"all 0.25s",
+              background:mopo?`linear-gradient(135deg,${C.deep},${C.mid})`:"transparent",
+              color:mopo?"#fff":C.deep,
+              border:`1.5px solid ${C.deep}`,
+              boxShadow:mopo?`0 3px 10px rgba(74,173,160,0.35)`:"none",
+            }}>
+              <span>↔</span>
+              <span>{mopo?"직항으로 전환":"목포 경유 보기"}</span>
             </button>
-          ))}
+          </div>
+
+          {/* 티켓 스타일 탭 */}
+          <div style={{borderRadius:14,overflow:"hidden",
+            boxShadow:"0 2px 10px rgba(74,173,160,0.1)",
+            border:`1.5px solid ${mopo?C.mid:C.inkFaint}`,
+            transition:"border-color 0.25s"}}>
+            {/* 티켓 헤더 스텁 */}
+            <div style={{
+              background:mopo?`rgba(74,173,160,0.1)`:C.pale,
+              padding:"5px 12px 4px",
+              borderBottom:`1.5px dashed ${mopo?C.mid:C.inkFaint}`,
+              display:"flex",alignItems:"center",justifyContent:"space-between",
+              transition:"all 0.25s",
+            }}>
+              <span style={{fontSize:8,letterSpacing:"2px",fontWeight:700,
+                color:mopo?C.deep:C.inkLight}}>
+                {mopo?"FERRY TICKET · 경유":"FERRY TICKET · 직항"}
+              </span>
+              <div style={{display:"flex",gap:1,height:8,opacity:0.3}}>
+                {[2,1,3,1,2,1,1,3,1,2,1].map((w,i)=>(
+                  <div key={i} style={{width:w*0.8,background:mopo?C.deep:C.inkLight,borderRadius:0.5}}/>
+                ))}
+              </div>
+            </div>
+            {/* 탭 버튼 */}
+            <div style={{background:C.white,padding:5,display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
+              {mainRoutes.map(r=>(
+                <button key={r} onClick={()=>setRouteKey(r)} style={{
+                  padding:"13px 8px",borderRadius:10,border:"none",cursor:"pointer",
+                  fontWeight:800,fontSize:14,transition:"all 0.2s",
+                  background:routeKey===r?"linear-gradient(135deg,#b87820,#e09828)":"transparent",
+                  color:routeKey===r?"#fff":C.inkLight,
+                  boxShadow:routeKey===r?"0 3px 12px rgba(224,152,40,0.35)":"none",
+                  display:"flex",alignItems:"center",justifyContent:"center",gap:5,
+                }}>
+                  <Anchor size={12} strokeWidth={2} color={routeKey===r?"rgba(255,255,255,0.75)":C.inkFaint}/>
+                  {ROUTE_LABELS[r]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 경유 안내 */}
+          {mopo&&(
+            <div style={{marginTop:6,fontSize:11,color:C.inkLight,textAlign:"center",
+              background:C.pale,borderRadius:8,padding:"5px 10px",border:`1px solid ${C.inkFaint}`}}>
+              🛳 도초카훼리 경유 ·{" "}
+              {routeKey==="목포_to_가산"
+                ?"목포(북항) 출발 → 가산 도착까지 약 2시간 15분"
+                :"가산 출발 → 목포(북항) 도착까지 약 1시간 50분"}
+            </div>
+          )}
         </div>
 
         {/* 오늘 날짜 + 운항 상태 */}
@@ -336,7 +495,11 @@ export default function App(){
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
                 <div style={{fontSize:13,color:"rgba(255,255,255,0.65)",marginBottom:6}}>
-                  {activeDep?"현재 운항중인 배":"다음 출항하는 배"}
+                  {activeDep?"현재 운항중인 배"
+                    :routeKey==="목포_to_가산"?"다음 목포 출발"
+                    :routeKey==="가산_to_목포"?"다음 목포행 출발"
+                    :routeKey==="남강_to_가산"?"다음 가산 도착"
+                    :"다음 남강행 출발"}
                 </div>
                 <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:8}}>
                   <span style={{fontSize:52,fontWeight:900,color:C.white,fontVariantNumeric:"tabular-nums",letterSpacing:"-2.5px",lineHeight:1}}>{highlight.dep}</span>
@@ -385,8 +548,8 @@ export default function App(){
             <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${allCancelled?"rgba(192,57,43,0.15)":"rgba(208,96,32,0.15)"}`,display:"flex",alignItems:"center",gap:10}}>
               <span style={{fontSize:16}}>📞</span>
               <div>
-                <div style={{fontSize:11,color:allCancelled?"#a05050":"#a06030"}}>남강항 문의</div>
-                <div style={{fontSize:20,fontWeight:900,color:C.ink}}>061-275-9915</div>
+                <div style={{fontSize:11,color:allCancelled?"#a05050":"#a06030"}}>선사 문의</div>
+                <div style={{fontSize:16,fontWeight:900,color:C.ink}}>섬드리 061-244-5251</div>
               </div>
             </div>
           </div>
@@ -424,7 +587,9 @@ export default function App(){
                   const tagLabel=isActive?"운항중":isCancel?"결항":isNext?"예정":"완료";
 
                   return(
-                    <div key={item.id}>
+                    <div key={item.id}
+                      ref={(isActive||(isNext&&!schedule.some(s=>s.status==="운항중")))?activeItemRef:null}
+                    >
                       {i>0&&<div style={{height:1,background:isCancel?"#fdf0ef":C.pale,marginLeft:58}}/>}
                       <div style={{
                         padding:"13px 16px",
@@ -541,16 +706,23 @@ export default function App(){
               <span style={{fontSize:13,color:C.inkMid,lineHeight:1.5}}>{t.text}</span>
             </div>
           ))}
-          {/* 전화 — SVG 아이콘 C-β 미드 틸 */}
-          <div style={{padding:"13px 16px",display:"flex",alignItems:"center",gap:14,borderTop:`1px solid ${C.inkFaint}`}}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-              stroke={C.mid} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.56A2 2 0 0 1 3.59 1.36h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.37a16 16 0 0 0 6.72 6.72l.88-.88a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
-            </svg>
-            <div>
-              <div style={{fontSize:10,color:C.inkLight,marginBottom:1}}>남강항 문의</div>
-              <div style={{fontSize:19,fontWeight:900,color:C.ink,letterSpacing:"-0.5px"}}>061-275-9915</div>
-            </div>
+          {/* 전화 — 선사 연락처 */}
+          <div style={{padding:"12px 14px",borderTop:`1px solid ${C.inkFaint}`}}>
+            <div style={{fontSize:10,color:C.inkLight,marginBottom:8,fontWeight:600}}>선사 연락처</div>
+            {[
+              {name:"섬드리 (비금농협고속)", tel:"061-244-5251"},
+              {name:"대흥고속카페리",        tel:"061-271-9917"},
+            ].map(({name,tel})=>(
+              <div key={tel} style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.mid} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.56A2 2 0 0 1 3.59 1.36h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.37a16 16 0 0 0 6.72 6.72l.88-.88a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+                </svg>
+                <div>
+                  <div style={{fontSize:10,color:C.inkLight}}>{name}</div>
+                  <div style={{fontSize:16,fontWeight:900,color:C.ink,letterSpacing:"-0.3px"}}>{tel}</div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -607,6 +779,47 @@ export default function App(){
 
       </div>{/* ── 본문 wrapper 닫기 ── */}
 
+      {/* ── 공지 모달 ── */}
+      {noticeOpen&&(
+        <div onClick={()=>setNoticeOpen(false)} style={{
+          position:"fixed",inset:0,zIndex:600,
+          background:"rgba(0,0,0,0.55)",backdropFilter:"blur(4px)",
+          display:"flex",alignItems:"flex-end",justifyContent:"center",
+        }}>
+          <div onClick={e=>e.stopPropagation()} style={{
+            width:"100%",maxWidth:480,
+            background:C.white,borderRadius:"24px 24px 0 0",
+            overflow:"hidden",
+          }}>
+            <div style={{background:"#fffbea",padding:"16px 20px 14px",
+              borderBottom:"1px solid #f5c46a",
+              display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:20}}>{NOTICE.badge}</span>
+                <span style={{fontSize:16,fontWeight:800,color:"#7a5010"}}>서비스 공지</span>
+              </div>
+              <button onClick={()=>setNoticeOpen(false)} style={{
+                background:"rgba(0,0,0,0.08)",border:"none",borderRadius:50,
+                width:30,height:30,cursor:"pointer",fontSize:14,
+                display:"flex",alignItems:"center",justifyContent:"center",
+              }}>✕</button>
+            </div>
+            <div style={{padding:"20px",fontSize:14,color:C.inkMid,lineHeight:2}}>
+              {NOTICE.detail.split("\n").map((line,i)=>(
+                <p key={i} style={{marginBottom:line===""?8:0}}>{line||"\u00A0"}</p>
+              ))}
+            </div>
+            <div style={{padding:"0 20px 24px"}}>
+              <button onClick={()=>{setNoticeOpen(false);setNoticeDismissed(true);}} style={{
+                width:"100%",padding:"13px",borderRadius:14,border:"none",
+                background:`linear-gradient(135deg,${C.deep},${C.mid})`,
+                color:"#fff",fontSize:14,fontWeight:800,cursor:"pointer",
+              }}>확인했습니다</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── 법적 고지 모달 ── */}
       {legalModal&&(
         <div onClick={()=>setLegalModal(null)} style={{
@@ -639,7 +852,7 @@ export default function App(){
             <div style={{overflowY:"auto",padding:"20px",fontSize:13,color:C.inkMid,lineHeight:1.9}}>
               {legalModal==="privacy"?(
                 <>
-                  <p style={{fontSize:12,color:C.inkLight,marginBottom:16}}>시행일: 2026년 5월 13일</p>
+                  <p style={{fontSize:12,color:C.inkLight,marginBottom:16}}>시행일: 2026년 5월 18일</p>
 
                   <h3 style={{fontSize:14,fontWeight:800,color:C.ink,margin:"0 0 8px"}}>1. 수집하는 개인정보</h3>
                   <p style={{marginBottom:16}}>비금통통은 회원가입, 로그인, 개인 식별 등의 절차가 없으며 <strong>어떠한 개인정보도 수집하지 않습니다.</strong></p>
@@ -660,7 +873,7 @@ export default function App(){
                 </>
               ):(
                 <>
-                  <p style={{fontSize:12,color:C.inkLight,marginBottom:16}}>시행일: 2026년 5월 13일</p>
+                  <p style={{fontSize:12,color:C.inkLight,marginBottom:16}}>시행일: 2026년 5월 18일</p>
 
                   <h3 style={{fontSize:14,fontWeight:800,color:C.ink,margin:"0 0 8px"}}>1. 서비스 목적</h3>
                   <p style={{marginBottom:16}}>비금통통은 비금도(가산항) ↔ 암태도(남강항) 간 여객선 운항 시간표 및 기상 정보를 제공하는 비공식 정보 서비스입니다.</p>
@@ -700,7 +913,11 @@ export default function App(){
         @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         button{font-family:inherit}
         button:active{opacity:0.82;transform:scale(0.97)}
-        ::-webkit-scrollbar{display:none}
+        ::-webkit-scrollbar{width:4px;height:4px}
+        ::-webkit-scrollbar-track{background:transparent}
+        ::-webkit-scrollbar-thumb{background:rgba(74,173,160,0.35);border-radius:4px}
+        ::-webkit-scrollbar-thumb:hover{background:rgba(74,173,160,0.6)}
+        *{scrollbar-width:thin;scrollbar-color:rgba(74,173,160,0.35) transparent}
       `}</style>
     </div>
   );
