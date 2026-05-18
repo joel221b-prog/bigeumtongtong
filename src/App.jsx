@@ -26,7 +26,7 @@ const NOTICE = {
     "정식 배포 후에는 App Store 및 Google Play를 통해 최신 버전을 이용하실 수 있습니다.",
     "",
     "현재 표시되는 운항 정보는 실제와 다를 수 있으니 반드시 선사에 확인 후 이용해 주세요.",
-    "오류나 개선 의견은 하단 선사 연락처로 알려주세요.",
+    "오류나 개선 의견은 joya.101.187@gmail.com으로 알려주세요.",
   ].join("\n"),
 };
 
@@ -197,11 +197,11 @@ export default function App(){
   };
 
   const allCancelled =schedule.length>0&&schedule.every(s=>s.status==="결항");
-  const someCancelled=!allCancelled&&schedule.some(s=>s.status==="결항");
+  const allDone      =!allCancelled&&schedule.length>0&&schedule.every(s=>s.status==="완료"||s.status==="결항");
+  const someCancelled=!allCancelled&&!allDone&&schedule.some(s=>s.status==="결항");
   const activeDep    =schedule.find(s=>s.status==="운항중");
   const nextDep      =!allCancelled?schedule.find(s=>s.status==="예정"):null;
   const highlight    =activeDep||nextDep;
-  const allDone      =!allCancelled&&schedule.length>0&&schedule.every(s=>s.status==="완료"||s.status==="결항");
 
   const weather = allCancelled
     ?{label:"풍랑주의보",color:C.red,  dot:C.red,  bg:"rgba(192,57,43,0.15)"}
@@ -490,8 +490,12 @@ export default function App(){
         {!loading&&!error&&(allCancelled||someCancelled)&&(()=>{
           const cancelled = schedule.filter(s=>s.status==="결항");
           const normal    = schedule.filter(s=>s.status!=="결항");
+          // 미래 결항만 (현재 시각 이후 출발)
+          const nowMin = (()=>{ const n=new Date(); return n.getHours()*60+n.getMinutes(); })();
+          const toMin  = dep=>{ const [h,m]=(dep||"").split(":").map(Number); return h*60+m; };
+          const futureCancelled = cancelled.filter(s=>toMin(s.dep)>nowMin);
           // 사유별 그룹핑
-          const reasonGroups = cancelled.reduce((acc,item)=>{
+          const reasonGroups = futureCancelled.reduce((acc,item)=>{
             const k=item.reason||"사유 미상"; if(!acc[k])acc[k]=[]; acc[k].push(item.dep); return acc;
           },{});
           const reasonIcon = r=>{
@@ -505,6 +509,8 @@ export default function App(){
           const carriers = isMopo
             ?[{name:"도초카훼리 (도조농협조합)",tel:"061-243-7916"}]
             :[{name:"섬드리 (비금농협고속)",tel:"061-244-5251"},{name:"대흥고속카페리",tel:"061-271-9917"}];
+          // 미래 결항이 없으면 카드 표시 안 함 (전편결항은 항상 표시)
+          if(!allCancelled&&futureCancelled.length===0) return null;
           return(
           <div style={{background:allCancelled?C.redLight:C.orangeLight,border:`1.5px solid ${allCancelled?"rgba(192,57,43,0.2)":"rgba(208,96,32,0.2)"}`,borderRadius:16,padding:"14px 16px",marginBottom:16}}>
             {/* 헤더 */}
@@ -512,7 +518,7 @@ export default function App(){
               <AlertCircle size={15} strokeWidth={2}/>
               <span style={{fontSize:14,fontWeight:800}}>결항 안내</span>
               <span style={{marginLeft:"auto",fontSize:11,fontWeight:700,background:allCancelled?"rgba(192,57,43,0.12)":"rgba(208,96,32,0.12)",color:allCancelled?C.red:C.orange,borderRadius:20,padding:"2px 9px",border:`1px solid ${allCancelled?"rgba(192,57,43,0.2)":"rgba(208,96,32,0.2)"}`}}>
-                {allCancelled?"전편 결항":`${cancelled.length}항차 결항`}
+                {allCancelled?"전편 결항":`${futureCancelled.length}항차 결항`}
               </span>
             </div>
 

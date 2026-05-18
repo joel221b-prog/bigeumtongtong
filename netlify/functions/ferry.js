@@ -27,18 +27,22 @@ function addMinutes(sailTm, min) {
 }
 
 const ROUTE_CONFIG = {
-  "남강_to_가산": {
-    lcns: ["남강","가산"], drc: "정방향", oport: "남강", dest: "",     arrMin: 40,
-  },
-  "목포_to_가산": {
-    lcns: ["도초","목포"], drc: "정방향", oport: "목포", dest: "비금", arrMin: 135,
-  },
-  "가산_to_남강": {
-    lcns: ["남강","가산"], drc: "역방향", oport: "가산", dest: "",     arrMin: 40,
-  },
-  "가산_to_목포": {
-    lcns: ["도초","목포"], drc: "역방향", oport: "비금", dest: "목포", arrMin: 110,
-  },
+  "남강_to_가산": [
+    { lcns:["남강","가산"], drc:"정방향", oport:"남강", dest:"",      arrMin:40  },
+    // 도초카훼리가 도초-목포 면허로 남강↔가산 구간 운항 (18:30, 20:10 등)
+    { lcns:["도초","목포"], drc:"정방향", oport:"남강", dest:"",      arrMin:40  },
+  ],
+  "가산_to_남강": [
+    { lcns:["남강","가산"], drc:"역방향", oport:"가산", dest:"",      arrMin:40  },
+    // 도초카훼리 가산 출발 직항 (19:20, 21:00 등)
+    { lcns:["도초","목포"], drc:"역방향", oport:"가산", dest:"",      arrMin:40  },
+  ],
+  "목포_to_가산": [
+    { lcns:["도초","목포"], drc:"정방향", oport:"목포", dest:"비금",  arrMin:135 },
+  ],
+  "가산_to_목포": [
+    { lcns:["도초","목포"], drc:"역방향", oport:"비금", dest:"목포",  arrMin:110 },
+  ],
 };
 
 exports.handler = async (event) => {
@@ -85,20 +89,21 @@ exports.handler = async (event) => {
     const all = Array.isArray(raw) ? raw : (raw && Object.keys(raw).length ? [raw] : []);
     console.log("[ferry] 전체 항목:", all.length);
 
-    /* ── 노선별 필터 ── */
-    const items = all.filter(item => {
+    /* ── 노선별 필터 (복수 조건 OR) ── */
+    const cfgList = Array.isArray(cfg) ? cfg : [cfg];
+    const matchItem = (item, c) => {
       const lcns  = item.lcns_seawy_nm ?? "";
       const drc   = item.nvg_drc_nm    ?? "";
       const oport = item.oport_nm      ?? "";
       const dest  = item.dest_nm       ?? "";
-
-      const lcnsMatch  = cfg.lcns.every(k => lcns.includes(k));
-      const drcMatch   = drc.includes(cfg.drc);
-      const oportMatch = oport.includes(cfg.oport);
-      const destMatch  = cfg.dest ? dest.includes(cfg.dest) : true;
-
-      return lcnsMatch && drcMatch && oportMatch && destMatch;
-    });
+      return c.lcns.every(k=>lcns.includes(k))
+          && drc.includes(c.drc)
+          && oport.includes(c.oport)
+          && (c.dest ? dest.includes(c.dest) : true);
+    };
+    const items = all.filter(item => cfgList.some(c => matchItem(item, c)));
+    // arrMin은 매칭된 첫 cfg에서 가져옴
+    const getArrMin = item => (cfgList.find(c=>matchItem(item,c))?.arrMin ?? 40);
 
     items.sort((a, b) => Number(a.sail_tm ?? 0) - Number(b.sail_tm ?? 0));
     console.log(`[ferry] ${depPort} 필터 후:`, items.length);
@@ -119,8 +124,8 @@ exports.handler = async (event) => {
       return {
         id:       idx + 1,
         dep:      fmtTime(item.sail_tm),
-        arr:      addMinutes(item.sail_tm, cfg.arrMin),
-        arrMin:   cfg.arrMin,
+        arr:      addMinutes(item.sail_tm, getArrMin(item)),
+        arrMin:   getArrMin(item),
         vessel:   item.psnshp_nm    ?? "정보없음",
         status,
         reason:   reason,
