@@ -28,16 +28,16 @@ function addMinutes(sailTm, min) {
 
 const ROUTE_CONFIG = {
   "남강_to_가산": {
-    lcns: ["남강","가산"], drc: "정방향", oport: "남강",     arrMin: 40,
+    lcns: ["남강","가산"], drc: "정방향", oport: "남강", dest: "",     arrMin: 40,
   },
   "목포_to_가산": {
-    lcns: ["도초","목포"], drc: "정방향", oport: "목포",     arrMin: 135,
+    lcns: ["도초","목포"], drc: "정방향", oport: "목포", dest: "비금", arrMin: 135,
   },
   "가산_to_남강": {
-    lcns: ["남강","가산"], drc: "역방향", oport: "가산",     arrMin: 40,
+    lcns: ["남강","가산"], drc: "역방향", oport: "가산", dest: "",     arrMin: 40,
   },
   "가산_to_목포": {
-    lcns: ["도초","목포"], drc: "역방향", oport: "비금",     arrMin: 110,
+    lcns: ["도초","목포"], drc: "역방향", oport: "비금", dest: "목포", arrMin: 110,
   },
 };
 
@@ -53,6 +53,9 @@ exports.handler = async (event) => {
 
   const cfg = ROUTE_CONFIG[depPort];
   if (!cfg) return res(400, { error: `알 수 없는 depPort: ${depPort}` });
+
+  // date 형식 검증: YYYYMMDD 숫자 8자리만 허용
+  if (!/^\d{8}$/.test(date)) return res(400, { error: "date 형식 오류 (YYYYMMDD)" });
 
   try {
     const params = new URLSearchParams({
@@ -87,12 +90,14 @@ exports.handler = async (event) => {
       const lcns  = item.lcns_seawy_nm ?? "";
       const drc   = item.nvg_drc_nm    ?? "";
       const oport = item.oport_nm      ?? "";
+      const dest  = item.dest_nm       ?? "";
 
       const lcnsMatch  = cfg.lcns.every(k => lcns.includes(k));
       const drcMatch   = drc.includes(cfg.drc);
       const oportMatch = oport.includes(cfg.oport);
+      const destMatch  = cfg.dest ? dest.includes(cfg.dest) : true;
 
-      return lcnsMatch && drcMatch && oportMatch;
+      return lcnsMatch && drcMatch && oportMatch && destMatch;
     });
 
     items.sort((a, b) => Number(a.sail_tm ?? 0) - Number(b.sail_tm ?? 0));
@@ -107,6 +112,10 @@ exports.handler = async (event) => {
                    : stts.includes("완료")   ? "완료"
                    : "예정";
 
+      // 결항 사유: cntrl_rsn_nm 우선, 없으면 nvg_stts_nm에서 추출
+      const rawReason = item.cntrl_rsn_nm ?? "";
+      const reason = rawReason || (nvgSe === "비운" ? "선박 미운항" : stts.includes("통제") ? "항로 통제" : "");
+
       return {
         id:       idx + 1,
         dep:      fmtTime(item.sail_tm),
@@ -114,7 +123,7 @@ exports.handler = async (event) => {
         arrMin:   cfg.arrMin,
         vessel:   item.psnshp_nm    ?? "정보없음",
         status,
-        reason:   item.cntrl_rsn_nm ?? "",
+        reason:   reason,
         depPort:  item.oport_nm     ?? "",
         destPort: item.dest_nm      ?? "",
         nvgSeawy: item.nvg_seawy_nm ?? "",

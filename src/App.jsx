@@ -56,7 +56,12 @@ function resolveStatus(apiStatus, dep, arrMin = 80) {
   if (isNaN(h)||isNaN(m)) return apiStatus;
   const dMin = h*60+m;
   const now  = new Date();
-  const nMin = now.getHours()*60+now.getMinutes();
+  let nMin = now.getHours()*60+now.getMinutes();
+
+  // 자정~새벽 6시 사이에 정오 이후 출발 항차를 체크할 때
+  // → 전날 저녁 항차이므로 현재시각에 24시간 추가해 비교
+  if (nMin < 360 && dMin > 720) nMin += 24*60;
+
   if (nMin>=dMin && nMin<dMin+arrMin) return "운항중";
   if (nMin>=dMin+arrMin) return "완료";
   return "예정";
@@ -327,6 +332,46 @@ export default function App(){
         </span>
       </div>
 
+      {/* ── T3 항로 선택 메뉴 (고정) ── */}
+      <div style={{padding:"10px 16px 10px",background:C.white,borderBottom:`1px solid ${C.inkFaint}`,flexShrink:0}}>
+          {/* 타이틀 + 목포 경유 토글 */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+            <div style={{display:"flex",alignItems:"center",gap:7}}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.deep} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/><polygon points="16.24,7.76 14.12,14.12 7.76,16.24 9.88,9.88" fill={C.deep} opacity="0.7" stroke="none"/>
+              </svg>
+              <span style={{fontSize:15,fontWeight:900,color:C.ink}}>항로 선택</span>
+              <span style={{fontSize:10,fontWeight:700,color:mopo?"#fff":C.goldDark,background:mopo?C.deep:C.goldLight,borderRadius:20,padding:"3px 9px",border:`1px solid ${mopo?C.deep:"rgba(224,152,40,0.3)"}`,transition:"all 0.25s"}}>
+                {mopo?"경유 선택중":"직항 선택중"}
+              </span>
+            </div>
+            <button onClick={()=>handleMopo(!mopo)} style={{display:"flex",alignItems:"center",gap:5,padding:"6px 13px",borderRadius:20,cursor:"pointer",fontSize:11,fontWeight:800,transition:"all 0.25s",background:mopo?`linear-gradient(135deg,${C.deep},${C.mid})`:"transparent",color:mopo?"#fff":C.deep,border:`1.5px solid ${C.deep}`,boxShadow:mopo?`0 3px 10px rgba(74,173,160,0.35)`:"none"}}>
+              <span>↔</span>
+              <span>{mopo?"직항으로 전환":"목포 경유 보기"}</span>
+            </button>
+          </div>
+          {/* 티켓 스타일 탭 */}
+          <div style={{borderRadius:14,overflow:"hidden",boxShadow:"0 2px 10px rgba(74,173,160,0.1)",border:`1.5px solid ${mopo?C.mid:C.inkFaint}`,transition:"border-color 0.25s"}}>
+            <div style={{background:mopo?`rgba(74,173,160,0.1)`:C.pale,padding:"5px 12px 4px",borderBottom:`1.5px dashed ${mopo?C.mid:C.inkFaint}`,display:"flex",alignItems:"center",justifyContent:"space-between",transition:"all 0.25s"}}>
+              <span style={{fontSize:8,letterSpacing:"2px",fontWeight:700,color:mopo?C.deep:C.inkLight}}>{mopo?"FERRY TICKET · 경유":"FERRY TICKET · 직항"}</span>
+              <div style={{display:"flex",gap:1,height:8,opacity:0.3}}>{[2,1,3,1,2,1,1,3,1,2,1].map((w,i)=>(<div key={i} style={{width:w*0.8,background:mopo?C.deep:C.inkLight,borderRadius:0.5}}/>))}</div>
+            </div>
+            <div style={{background:C.white,padding:5,display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
+              {mainRoutes.map(r=>(<button key={r} onClick={()=>setRouteKey(r)} style={{padding:"13px 8px",borderRadius:10,border:"none",cursor:"pointer",fontWeight:800,fontSize:14,transition:"all 0.2s",background:routeKey===r?"linear-gradient(135deg,#b87820,#e09828)":"transparent",color:routeKey===r?"#fff":C.inkLight,boxShadow:routeKey===r?"0 3px 12px rgba(224,152,40,0.35)":"none",display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
+                <Anchor size={12} strokeWidth={2} color={routeKey===r?"rgba(255,255,255,0.75)":C.inkFaint}/>
+                {ROUTE_LABELS[r]}
+              </button>))}
+            </div>
+          </div>
+          {/* 경유 안내 */}
+          {mopo&&(
+            <div style={{marginTop:6,fontSize:11,color:C.inkLight,textAlign:"center",background:C.pale,borderRadius:8,padding:"5px 10px",border:`1px solid ${C.inkFaint}`}}>
+              🛳 도초카훼리 경유 ·{" "}
+              {routeKey==="목포_to_가산"?"목포(북항) 출발 → 가산 도착까지 약 2시간 15분":"가산 출발 → 목포(북항) 도착까지 약 1시간 50분"}
+            </div>
+          )}
+      </div>
+
       </div>{/* ── 고정 헤더 영역 닫기 ── */}
 
       {/* ── 스크롤 본문 ── */}
@@ -352,95 +397,7 @@ export default function App(){
           </div>
         )}
 
-        {/* ── T3 항로 선택 메뉴 ── */}
-        <div style={{marginBottom:12}}>
-          {/* 타이틀 + 목포 경유 토글 */}
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-            <div style={{display:"flex",alignItems:"center",gap:7}}>
-              {/* 나침반 아이콘 */}
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.deep} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/>
-                <polygon points="16.24,7.76 14.12,14.12 7.76,16.24 9.88,9.88" fill={C.deep} opacity="0.7" stroke="none"/>
-              </svg>
-              <span style={{fontSize:15,fontWeight:900,color:C.ink}}>항로 선택</span>
-              <span style={{fontSize:10,fontWeight:700,
-                color:mopo?"#fff":C.goldDark,
-                background:mopo?C.deep:C.goldLight,
-                borderRadius:20,padding:"3px 9px",
-                border:`1px solid ${mopo?C.deep:"rgba(224,152,40,0.3)"}`,
-                transition:"all 0.25s",
-              }}>
-                {mopo?"경유 선택중":"직항 선택중"}
-              </span>
-            </div>
-            <button onClick={()=>handleMopo(!mopo)} style={{
-              display:"flex",alignItems:"center",gap:5,padding:"6px 13px",
-              borderRadius:20,cursor:"pointer",fontSize:11,fontWeight:800,
-              transition:"all 0.25s",
-              background:mopo?`linear-gradient(135deg,${C.deep},${C.mid})`:"transparent",
-              color:mopo?"#fff":C.deep,
-              border:`1.5px solid ${C.deep}`,
-              boxShadow:mopo?`0 3px 10px rgba(74,173,160,0.35)`:"none",
-            }}>
-              <span>↔</span>
-              <span>{mopo?"직항으로 전환":"목포 경유 보기"}</span>
-            </button>
-          </div>
-
-          {/* 티켓 스타일 탭 */}
-          <div style={{borderRadius:14,overflow:"hidden",
-            boxShadow:"0 2px 10px rgba(74,173,160,0.1)",
-            border:`1.5px solid ${mopo?C.mid:C.inkFaint}`,
-            transition:"border-color 0.25s"}}>
-            {/* 티켓 헤더 스텁 */}
-            <div style={{
-              background:mopo?`rgba(74,173,160,0.1)`:C.pale,
-              padding:"5px 12px 4px",
-              borderBottom:`1.5px dashed ${mopo?C.mid:C.inkFaint}`,
-              display:"flex",alignItems:"center",justifyContent:"space-between",
-              transition:"all 0.25s",
-            }}>
-              <span style={{fontSize:8,letterSpacing:"2px",fontWeight:700,
-                color:mopo?C.deep:C.inkLight}}>
-                {mopo?"FERRY TICKET · 경유":"FERRY TICKET · 직항"}
-              </span>
-              <div style={{display:"flex",gap:1,height:8,opacity:0.3}}>
-                {[2,1,3,1,2,1,1,3,1,2,1].map((w,i)=>(
-                  <div key={i} style={{width:w*0.8,background:mopo?C.deep:C.inkLight,borderRadius:0.5}}/>
-                ))}
-              </div>
-            </div>
-            {/* 탭 버튼 */}
-            <div style={{background:C.white,padding:5,display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
-              {mainRoutes.map(r=>(
-                <button key={r} onClick={()=>setRouteKey(r)} style={{
-                  padding:"13px 8px",borderRadius:10,border:"none",cursor:"pointer",
-                  fontWeight:800,fontSize:14,transition:"all 0.2s",
-                  background:routeKey===r?"linear-gradient(135deg,#b87820,#e09828)":"transparent",
-                  color:routeKey===r?"#fff":C.inkLight,
-                  boxShadow:routeKey===r?"0 3px 12px rgba(224,152,40,0.35)":"none",
-                  display:"flex",alignItems:"center",justifyContent:"center",gap:5,
-                }}>
-                  <Anchor size={12} strokeWidth={2} color={routeKey===r?"rgba(255,255,255,0.75)":C.inkFaint}/>
-                  {ROUTE_LABELS[r]}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 경유 안내 */}
-          {mopo&&(
-            <div style={{marginTop:6,fontSize:11,color:C.inkLight,textAlign:"center",
-              background:C.pale,borderRadius:8,padding:"5px 10px",border:`1px solid ${C.inkFaint}`}}>
-              🛳 도초카훼리 경유 ·{" "}
-              {routeKey==="목포_to_가산"
-                ?"목포(북항) 출발 → 가산 도착까지 약 2시간 15분"
-                :"가산 출발 → 목포(북항) 도착까지 약 1시간 50분"}
-            </div>
-          )}
-        </div>
-
-        {/* 오늘 날짜 + 운항 상태 */}
+        {/* ── 오늘 날짜 + 운항 상태 */}
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
           <span style={{fontSize:20,fontWeight:900,color:C.ink}}>오늘</span>
           <span style={{fontSize:13,fontWeight:700,color:badge.color,background:badge.bg,borderRadius:20,padding:"3px 10px",border:`1px solid ${badge.border}`}}>
@@ -530,34 +487,92 @@ export default function App(){
         )}
 
         {/* ── 결항 안내 카드 ── */}
-        {!loading&&!error&&(allCancelled||someCancelled)&&(
+        {!loading&&!error&&(allCancelled||someCancelled)&&(()=>{
+          const cancelled = schedule.filter(s=>s.status==="결항");
+          const normal    = schedule.filter(s=>s.status!=="결항");
+          // 사유별 그룹핑
+          const reasonGroups = cancelled.reduce((acc,item)=>{
+            const k=item.reason||"사유 미상"; if(!acc[k])acc[k]=[]; acc[k].push(item.dep); return acc;
+          },{});
+          const reasonIcon = r=>{
+            if(r.includes("풍랑"))return"🌊"; if(r.includes("태풍"))return"🌀";
+            if(r.includes("안개"))return"🌫"; if(r.includes("기상"))return"⛈";
+            if(r.includes("통제"))return"🚫"; if(r.includes("결함")||r.includes("미운항"))return"🔧";
+            return"⚠️";
+          };
+          // 노선별 선사
+          const isMopo = routeKey==="목포_to_가산"||routeKey==="가산_to_목포";
+          const carriers = isMopo
+            ?[{name:"도초카훼리 (도조농협조합)",tel:"061-243-7916"}]
+            :[{name:"섬드리 (비금농협고속)",tel:"061-244-5251"},{name:"대흥고속카페리",tel:"061-271-9917"}];
+          return(
           <div style={{background:allCancelled?C.redLight:C.orangeLight,border:`1.5px solid ${allCancelled?"rgba(192,57,43,0.2)":"rgba(208,96,32,0.2)"}`,borderRadius:16,padding:"14px 16px",marginBottom:16}}>
+            {/* 헤더 */}
             <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10,color:allCancelled?C.red:C.orange}}>
               <AlertCircle size={15} strokeWidth={2}/>
               <span style={{fontSize:14,fontWeight:800}}>결항 안내</span>
+              <span style={{marginLeft:"auto",fontSize:11,fontWeight:700,background:allCancelled?"rgba(192,57,43,0.12)":"rgba(208,96,32,0.12)",color:allCancelled?C.red:C.orange,borderRadius:20,padding:"2px 9px",border:`1px solid ${allCancelled?"rgba(192,57,43,0.2)":"rgba(208,96,32,0.2)"}`}}>
+                {allCancelled?"전편 결항":`${cancelled.length}항차 결항`}
+              </span>
             </div>
-            {(allCancelled?[
-              "기상 회복 후 즉시 운항 재개 예정입니다",
-              "여객 대기는 터미널 내에서 해주세요",
-              "운항 재개 시 즉시 안내해 드립니다",
-            ]:[
-              "일부 항차가 기상 악화로 결항되었습니다",
-              "나머지 항차는 정상 운항 중입니다",
-              "기상 변화에 따라 추가 결항이 생길 수 있습니다",
-            ]).map((t,i)=>(
-              <div key={i} style={{fontSize:13,color:allCancelled?"#7a3030":"#7a4020",marginBottom:6,display:"flex",gap:7,lineHeight:1.5}}>
-                <span style={{color:allCancelled?C.red:C.orange,flexShrink:0}}>—</span>{t}
+
+            {/* 사유별 결항 시간 그룹 */}
+            <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:10}}>
+              {Object.entries(reasonGroups).map(([rsn,times])=>(
+                <div key={rsn} style={{background:allCancelled?"rgba(192,57,43,0.07)":"rgba(208,96,32,0.07)",borderRadius:10,padding:"10px 12px"}}>
+                  <div style={{fontSize:12,fontWeight:800,color:allCancelled?C.red:C.orange,marginBottom:6,display:"flex",alignItems:"center",gap:5}}>
+                    <span>{reasonIcon(rsn)}</span>
+                    <span>{rsn}</span>
+                    <span style={{fontSize:10,fontWeight:700,marginLeft:2,background:allCancelled?"rgba(192,57,43,0.15)":"rgba(208,96,32,0.15)",borderRadius:20,padding:"1px 7px"}}>{times.length}항차</span>
+                  </div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                    {times.map(t=>(
+                      <span key={t} style={{fontSize:13,fontWeight:800,color:allCancelled?C.red:C.orange,background:allCancelled?"rgba(192,57,43,0.12)":"rgba(208,96,32,0.12)",borderRadius:8,padding:"3px 9px",border:`1px solid ${allCancelled?"rgba(192,57,43,0.2)":"rgba(208,96,32,0.2)"}`,fontVariantNumeric:"tabular-nums"}}>{t}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* 정상 운항 시간 (일부 결항 시만) */}
+            {!allCancelled&&normal.length>0&&(
+              <div style={{background:"rgba(74,173,160,0.10)",border:"1.5px solid rgba(74,173,160,0.28)",borderRadius:10,padding:"9px 12px",marginBottom:10}}>
+                <div style={{fontSize:11,fontWeight:700,color:C.deep,marginBottom:5}}>✅ 정상 운항 · {normal.length}항차</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                  {normal.map(s=>(
+                    <span key={s.dep} style={{fontSize:13,fontWeight:800,color:C.deep,background:"rgba(74,173,160,0.15)",borderRadius:8,padding:"3px 9px",border:"1px solid rgba(74,173,160,0.30)",fontVariantNumeric:"tabular-nums"}}>{s.dep}</span>
+                  ))}
+                </div>
               </div>
-            ))}
-            <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${allCancelled?"rgba(192,57,43,0.15)":"rgba(208,96,32,0.15)"}`,display:"flex",alignItems:"center",gap:10}}>
-              <span style={{fontSize:16}}>📞</span>
-              <div>
-                <div style={{fontSize:11,color:allCancelled?"#a05050":"#a06030"}}>선사 문의</div>
-                <div style={{fontSize:16,fontWeight:900,color:C.ink}}>섬드리 061-244-5251</div>
+            )}
+
+            {/* 안내 문구 */}
+            <div style={{marginBottom:10}}>
+              {(allCancelled?["기상 회복 후 즉시 운항 재개 예정입니다","여객 대기는 터미널 내에서 해주세요"]:["기상 변화에 따라 추가 결항이 생길 수 있습니다"]).map((t,i)=>(
+                <div key={i} style={{fontSize:13,color:allCancelled?"#7a3030":"#7a4020",marginBottom:4,display:"flex",gap:7,lineHeight:1.5}}>
+                  <span style={{color:allCancelled?C.red:C.orange,flexShrink:0}}>—</span>{t}
+                </div>
+              ))}
+            </div>
+
+            {/* 선사 연락처 */}
+            <div style={{paddingTop:10,borderTop:`1px solid ${allCancelled?"rgba(192,57,43,0.15)":"rgba(208,96,32,0.15)"}`}}>
+              <div style={{fontSize:11,fontWeight:700,color:allCancelled?"#a05050":"#a06030",marginBottom:7}}>📞 선사 직접 문의</div>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {carriers.map(c=>(
+                  <a key={c.tel} href={`tel:${c.tel.replace(/-/g,"")}`} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:C.white,borderRadius:10,padding:"9px 12px",border:`1px solid ${allCancelled?"rgba(192,57,43,0.15)":"rgba(208,96,32,0.15)"}`,textDecoration:"none",boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
+                    <div>
+                      <div style={{fontSize:11,color:C.inkLight,fontWeight:600}}>{c.name}</div>
+                      <div style={{fontSize:16,fontWeight:900,color:C.ink,fontVariantNumeric:"tabular-nums",letterSpacing:"0.3px"}}>{c.tel}</div>
+                    </div>
+                    <div style={{background:allCancelled?C.red:C.orange,borderRadius:20,padding:"5px 12px",fontSize:12,fontWeight:800,color:C.white}}>전화</div>
+                  </a>
+                ))}
               </div>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* ── 시간표 ── */}
         {!loading&&!error&&(
@@ -873,7 +888,7 @@ export default function App(){
                   <p style={{marginBottom:16}}>비금통통은 쿠키, 광고 추적, 분석 도구를 사용하지 않습니다.</p>
 
                   <h3 style={{fontSize:14,fontWeight:800,color:C.ink,margin:"0 0 8px"}}>4. 문의</h3>
-                  <p>개인정보 관련 문의는 앱 스토어 개발자 연락처로 해주세요.</p>
+                  <p>개인정보 관련 문의는 joya.101.187@gmail.com으로 이메일 주세요.</p>
                 </>
               ):(
                 <>
