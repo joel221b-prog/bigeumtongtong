@@ -48,7 +48,7 @@ const toDateStr = d => {
   return `${y}${m}${day}`;
 };
 
-function resolveStatus(apiStatus, dep, arrMin = 80) {
+function resolveStatus(apiStatus, dep, arrMin = 80, fetchedDateStr = null) {
   if (apiStatus === "결항") return "결항";
 
   if (!dep) return apiStatus;
@@ -58,9 +58,12 @@ function resolveStatus(apiStatus, dep, arrMin = 80) {
   const now  = new Date();
   let nMin = now.getHours()*60+now.getMinutes();
 
-  // 자정~새벽 6시 사이에 정오 이후 출발 항차를 체크할 때
-  // → 전날 저녁 항차이므로 현재시각에 24시간 추가해 비교
-  if (nMin < 360 && dMin > 720) nMin += 24*60;
+  // fetch한 날짜가 오늘보다 이전이고 자정~새벽 6시 → 어제 데이터를 보는 중
+  // → 현재 시각에 24시간 추가해서 어제 항차를 완료로 처리
+  if (fetchedDateStr) {
+    const todayStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}`;
+    if (fetchedDateStr < todayStr && nMin < 360) nMin += 24*60;
+  }
 
   if (nMin>=dMin && nMin<dMin+arrMin) return "운항중";
   if (nMin>=dMin+arrMin) return "완료";
@@ -120,10 +123,11 @@ export default function App(){
       const data     = await res.json();
       if(data.error) throw new Error(data.error);
 
-      /* 상태 보정 */
+      /* 상태 보정 - fetch한 날짜를 전달해 자정 크로스 정확히 처리 */
+      const fetchedDate = data.date ?? null;
       const withStatus = (data.schedule||[]).map(item=>({
         ...item,
-        status: resolveStatus(item.status, item.dep, item.arrMin ?? 80),
+        status: resolveStatus(item.status, item.dep, item.arrMin ?? 80, fetchedDate),
       }));
       setSchedule(withStatus);
       setLastRefresh(new Date());
