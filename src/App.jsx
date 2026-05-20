@@ -218,14 +218,24 @@ export default function App(){
   const nextDep      =!allCancelled?schedule.find(s=>s.status==="예정"):null;
   const highlight    =activeDep||nextDep;
 
+  /* 결항 사유 분류 */
+  const isWeatherReason = r => {
+    if (!r) return false; // 사유 없으면 기상으로 간주 (보수적)
+    const nonWeather = ["선박 검사","선박 미운항","선박 정비","선박 결함","항로 통제","비운항"];
+    if (nonWeather.some(k => r.includes(k))) return false;
+    return true; // 기상악화, 풍랑주의보, 태풍, 안개 등
+  };
+
   /* 미래 결항 여부 (현재 시각 이후 출발 항차 중 결항) */
   const nowMinForBadge=(()=>{const n=new Date();return n.getHours()*60+n.getMinutes();})();
   const toMinB=dep=>{const[h,m]=(dep||"").split(":").map(Number);return h*60+m;};
-  const hasFutureCancel=schedule.some(s=>s.status==="결항"&&toMinB(s.dep)>nowMinForBadge);
+  const futureCancelList=schedule.filter(s=>s.status==="결항"&&toMinB(s.dep)>nowMinForBadge);
+  const hasFutureCancel=futureCancelList.length>0;
+  const hasWeatherCancel=futureCancelList.some(s=>isWeatherReason(s.reason));
 
   const weather = allCancelled
     ?{label:"풍랑주의보",  color:C.red,   dot:C.red,   bg:"rgba(192,57,43,0.15)"}
-    :hasFutureCancel
+    :hasWeatherCancel
     ?{label:"기상악화 주의",color:C.orange,dot:C.orange,bg:"rgba(208,96,32,0.12)"}
     :{label:"기상 양호",   color:C.deep,  dot:C.deep,  bg:"rgba(74,173,160,0.15)"};
 
@@ -461,12 +471,14 @@ export default function App(){
           const nowMin=(()=>{const n=new Date();return n.getHours()*60+n.getMinutes();})();
           const toMin =dep=>{const[h,m]=(dep||"").split(":").map(Number);return h*60+m;};
           const futureCancelled=schedule.filter(s=>s.status==="결항"&&toMin(s.dep)>nowMin);
-          if(futureCancelled.length===0) return null; // 미래 결항 없으면 배너 숨김
+          if(futureCancelled.length===0) return null;
+          const hasWeather=futureCancelled.some(s=>isWeatherReason(s.reason));
+          const bannerLabel=hasWeather?"기상 악화 · 일부 결항":"운항 변경 · 일부 결항";
           return(
           <div style={{background:"linear-gradient(135deg,#b85018,#e06828)",borderRadius:20,padding:"18px 22px",marginBottom:16,boxShadow:"0 8px 24px rgba(208,96,32,0.28)"}}>
             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
               <AlertTriangle size={16} strokeWidth={2} color={C.white}/>
-              <span style={{fontSize:13,color:"rgba(255,255,255,0.85)",fontWeight:700}}>기상 악화 · 일부 결항</span>
+              <span style={{fontSize:13,color:"rgba(255,255,255,0.85)",fontWeight:700}}>{bannerLabel}</span>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:6}}>
               {futureCancelled.map(s=>(
