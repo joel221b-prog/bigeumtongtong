@@ -36,6 +36,8 @@ const ROUTE_CONFIG = {
     { lcns:["남강","가산"], drc:"역방향", oport:"가산", dest:"",      arrMin:40  },
     // 도초카훼리 가산 출발 직항 (19:20, 21:00 등)
     { lcns:["도초","목포"], drc:"역방향", oport:"가산", dest:"",      arrMin:40  },
+    // 도초카훼리 비금·도초 출발 → 가산 경유 → 남강 (11:20, 15:00 등)
+    { lcns:["도초","목포"], drc:"역방향", oport:"비금", dest:"남강",  arrMin:40  },
   ],
   "목포_to_가산": [
     { lcns:["도초","목포"], drc:"정방향", oport:"목포", dest:"비금",  arrMin:135 },
