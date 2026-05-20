@@ -123,11 +123,23 @@ exports.handler = async () => {
       };
     });
 
-    const today   = byDate[date] ?? {};
+    /* 현재 KST 오늘 날짜 (base_date와 무관하게 실제 오늘) */
+    const todayKst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const todayStr = todayKst.toISOString().slice(0, 10).replace(/-/g, "");
+    const currHHMM = String(todayKst.getHours()).padStart(2, "0") + "00";
+
+    /* 오늘 예보 항목 중 현재 시각 이하 최근 예보 시각 찾기 */
+    const todayItems = items.filter(i => i.fcstDate === todayStr);
+    const fcstTimes  = [...new Set(todayItems.map(i => i.fcstTime))].sort();
+    const nearTime   = fcstTimes.filter(t => t <= currHHMM).pop() ?? fcstTimes[0] ?? currHHMM;
+    const curItems   = todayItems.filter(i => i.fcstTime === nearTime);
+    const getVal     = cat => curItems.find(i => i.category === cat)?.fcstValue ?? null;
+
     const current = {
-      windSpeed: today.wsd?.[0] ?? null,
-      windDir:   degToDir(today.vec?.[0]),
-      waveH:     today.wav?.[0] ?? null,
+      windSpeed: getVal("WSD") != null ? Number(getVal("WSD")) : null,
+      windDir:   degToDir(getVal("VEC")),
+      waveH:     getVal("WAV") != null ? Number(getVal("WAV")) : null,
+      fcstTime:  nearTime, // 디버그용
     };
 
     console.log("[weather] 완료:", daily.length, "일, 현재기상:", JSON.stringify(current));

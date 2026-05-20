@@ -83,6 +83,7 @@ export default function App(){
   if(!todayBaseRef.current){const d=new Date();d.setHours(0,0,0,0);todayBaseRef.current=d;}
   const todayBase=todayBaseRef.current;
   const activeItemRef=useRef(null); /* 운항중/첫 예정 항차 자동 스크롤 */
+  const scrollContainerRef=useRef(null); /* 스크롤 컨테이너 */
 
   /* 공지 */
   const [noticeOpen,setNoticeOpen]           =useState(false);
@@ -146,6 +147,16 @@ export default function App(){
   useEffect(()=>{
     if(loading||schedule.length===0) return;
     const timer=setTimeout(()=>{
+      const now=new Date();
+      const nMin=now.getHours()*60+now.getMinutes();
+      // 자정~새벽 6시: 새 하루 시작 → 무조건 최상단
+      if(nMin<360){
+        // 자정~새벽 6시: 스크롤 컨테이너 최상단으로
+        if(scrollContainerRef.current){
+          scrollContainerRef.current.scrollTo({top:0,behavior:"smooth"});
+        }
+        return;
+      }
       if(activeItemRef.current){
         activeItemRef.current.scrollIntoView({behavior:"smooth",block:"center"});
       }
@@ -207,11 +218,16 @@ export default function App(){
   const nextDep      =!allCancelled?schedule.find(s=>s.status==="예정"):null;
   const highlight    =activeDep||nextDep;
 
+  /* 미래 결항 여부 (현재 시각 이후 출발 항차 중 결항) */
+  const nowMinForBadge=(()=>{const n=new Date();return n.getHours()*60+n.getMinutes();})();
+  const toMinB=dep=>{const[h,m]=(dep||"").split(":").map(Number);return h*60+m;};
+  const hasFutureCancel=schedule.some(s=>s.status==="결항"&&toMinB(s.dep)>nowMinForBadge);
+
   const weather = allCancelled
-    ?{label:"풍랑주의보",color:C.red,  dot:C.red,  bg:"rgba(192,57,43,0.15)"}
-    :someCancelled
+    ?{label:"풍랑주의보",  color:C.red,   dot:C.red,   bg:"rgba(192,57,43,0.15)"}
+    :hasFutureCancel
     ?{label:"기상악화 주의",color:C.orange,dot:C.orange,bg:"rgba(208,96,32,0.12)"}
-    :{label:"기상 양호",  color:C.deep, dot:C.deep, bg:"rgba(74,173,160,0.15)"};
+    :{label:"기상 양호",   color:C.deep,  dot:C.deep,  bg:"rgba(74,173,160,0.15)"};
 
   /* 헤더 기상 표시값 — 실제 기상청 데이터 우선, 없으면 placeholder */
   const windLabel = realWeather?.windDir && realWeather?.windSpeed != null
@@ -379,10 +395,10 @@ export default function App(){
       </div>{/* ── 고정 헤더 영역 닫기 ── */}
 
       {/* ── 스크롤 본문 ── */}
-      <div style={{flex:1,overflowY:"auto",padding:"14px 16px 0",paddingBottom:24}}>
+      <div ref={scrollContainerRef} style={{flex:1,overflowY:"auto",padding:"14px 16px 0",paddingBottom:24}}>
 
-        {/* ── 공지 배너 ── */}
-        {!noticeDismissed&&(
+        {/* ── 공지 배너 (가산→남강 탭에서만 표시) ── */}
+        {!noticeDismissed&&routeKey==="가산_to_남강"&&(
           <div style={{display:"flex",alignItems:"center",gap:10,
             background:"rgba(26,50,48,0.92)",borderRadius:14,padding:"10px 14px",marginBottom:12}}>
             <span style={{fontSize:16,flexShrink:0}}>🐚</span>
@@ -441,18 +457,33 @@ export default function App(){
         )}
 
         {/* ── 일부 결항 배너 ── */}
-        {!loading&&!error&&someCancelled&&(
+        {!loading&&!error&&someCancelled&&(()=>{
+          const nowMin=(()=>{const n=new Date();return n.getHours()*60+n.getMinutes();})();
+          const toMin =dep=>{const[h,m]=(dep||"").split(":").map(Number);return h*60+m;};
+          const futureCancelled=schedule.filter(s=>s.status==="결항"&&toMin(s.dep)>nowMin);
+          if(futureCancelled.length===0) return null; // 미래 결항 없으면 배너 숨김
+          return(
           <div style={{background:"linear-gradient(135deg,#b85018,#e06828)",borderRadius:20,padding:"18px 22px",marginBottom:16,boxShadow:"0 8px 24px rgba(208,96,32,0.28)"}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
               <AlertTriangle size={16} strokeWidth={2} color={C.white}/>
               <span style={{fontSize:13,color:"rgba(255,255,255,0.85)",fontWeight:700}}>기상 악화 · 일부 결항</span>
             </div>
-            <div style={{fontSize:24,fontWeight:900,color:C.white,letterSpacing:"-0.5px",marginBottom:6}}>
-              {schedule.filter(s=>s.status==="결항").map(s=>s.id+"항차").join(" · ")} 결항
+            <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:6}}>
+              {futureCancelled.map(s=>(
+                <span key={s.dep} style={{
+                  fontSize:22,fontWeight:900,color:C.white,
+                  background:"rgba(255,255,255,0.15)",
+                  borderRadius:8,padding:"2px 10px",
+                  fontVariantNumeric:"tabular-nums",
+                  border:"1px solid rgba(255,255,255,0.25)",
+                }}>{s.dep}</span>
+              ))}
+              <span style={{fontSize:20,fontWeight:800,color:"rgba(255,255,255,0.9)"}}>결항</span>
             </div>
             <div style={{fontSize:14,color:"rgba(255,255,255,0.8)"}}>나머지 항차는 정상 운항 중입니다</div>
           </div>
-        )}
+          );
+        })()}
 
         {/* ── 정상 출항 배너 ── */}
         {!loading&&!error&&!allCancelled&&highlight&&(
@@ -490,10 +521,9 @@ export default function App(){
           </div>
         )}
 
-        {/* ── 결항 안내 카드 ── */}
-        {!loading&&!error&&(allCancelled||someCancelled)&&(()=>{
+        {/* ── 결항 안내 카드 (전편 결항 시만) ── */}
+        {!loading&&!error&&allCancelled&&(()=>{
           const cancelled = schedule.filter(s=>s.status==="결항");
-          const normal    = schedule.filter(s=>s.status!=="결항");
           // 미래 결항만 (현재 시각 이후 출발)
           const nowMin = (()=>{ const n=new Date(); return n.getHours()*60+n.getMinutes(); })();
           const toMin  = dep=>{ const [h,m]=(dep||"").split(":").map(Number); return h*60+m; };
@@ -544,18 +574,6 @@ export default function App(){
               ))}
             </div>
 
-            {/* 정상 운항 시간 (일부 결항 시만) */}
-            {!allCancelled&&normal.length>0&&(
-              <div style={{background:"rgba(74,173,160,0.10)",border:"1.5px solid rgba(74,173,160,0.28)",borderRadius:10,padding:"9px 12px",marginBottom:10}}>
-                <div style={{fontSize:11,fontWeight:700,color:C.deep,marginBottom:5}}>✅ 정상 운항 · {normal.length}항차</div>
-                <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                  {normal.map(s=>(
-                    <span key={s.dep} style={{fontSize:13,fontWeight:800,color:C.deep,background:"rgba(74,173,160,0.15)",borderRadius:8,padding:"3px 9px",border:"1px solid rgba(74,173,160,0.30)",fontVariantNumeric:"tabular-nums"}}>{s.dep}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* 안내 문구 */}
             <div style={{marginBottom:10}}>
               {(allCancelled?["기상 회복 후 즉시 운항 재개 예정입니다","여객 대기는 터미널 내에서 해주세요"]:["기상 변화에 따라 추가 결항이 생길 수 있습니다"]).map((t,i)=>(
@@ -603,7 +621,8 @@ export default function App(){
               </div>
             ):(
               <div style={{background:C.white,borderRadius:16,overflow:"hidden",boxShadow:"0 2px 12px rgba(74,173,160,0.08)",border:`1px solid ${C.inkFaint}`,marginBottom:16}}>
-                {schedule.map((item,i)=>{
+                {(()=>{ const firstNextId=schedule.find(s=>s.status==="예정")?.id; return(
+                schedule.map((item,i)=>{
                   const isDone  =item.status==="완료";
                   const isActive=item.status==="운항중";
                   const isNext  =item.status==="예정";
@@ -617,7 +636,7 @@ export default function App(){
 
                   return(
                     <div key={item.id}
-                      ref={(isActive||(isNext&&!schedule.some(s=>s.status==="운항중")))?activeItemRef:null}
+                      ref={(isActive||(item.id===firstNextId&&!schedule.some(s=>s.status==="운항중")))?activeItemRef:null}
                     >
                       {i>0&&<div style={{height:1,background:isCancel?"#fdf0ef":C.pale,marginLeft:58}}/>}
                       <div style={{
@@ -670,7 +689,8 @@ export default function App(){
                       </div>
                     </div>
                   );
-                })}
+                }))
+                ;})()}
               </div>
             )}
           </>
